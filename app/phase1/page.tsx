@@ -230,7 +230,7 @@ export default function Phase1Picks() {
           <div>
             <h3 className="text-emerald-400 font-bold text-sm tracking-wide uppercase mb-1">Live Group Stage Active</h3>
             <p className="text-slate-400 text-sm">
-              Records update dynamically via API. Official scoring (144 total points) will calculate after the final group match concludes.
+              Records updated live. Official scoring after the final group match concludes.
             </p>
           </div>
         </div>
@@ -258,18 +258,6 @@ export default function Phase1Picks() {
                🔒 READ ONLY: {activeProfile?.display_name}'s Bracket
              </div>
            )}
-        </div>
-
-        {/* Floating 3Q Tracker */}
-        <div className="sticky top-4 z-50 flex justify-center mb-10">
-          <div className={`px-6 py-3 rounded-full border shadow-xl flex items-center space-x-3 transition-colors ${
-            total3Q === 8 ? 'bg-emerald-900/50 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-300'
-          }`}>
-            <span className="font-bold tracking-widest uppercase text-xs">Advancing 3rd Place Teams (3Q)</span>
-            <div className={`text-lg font-black px-3 py-1 rounded-full ${total3Q === 8 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-white'}`}>
-              {total3Q} / 8
-            </div>
-          </div>
         </div>
 
         {/* The 12 Tournament Groups */}
@@ -327,6 +315,18 @@ export default function Phase1Picks() {
               </div>
             );
           })}
+        </div>
+        
+        {/* Floating 3Q Tracker */}
+        <div className="flex justify-center mb-10">
+          <div className={`px-6 py-3 rounded-full border shadow-xl flex items-center space-x-3 transition-colors ${
+            total3Q === 8 ? 'bg-emerald-900/50 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-300'
+          }`}>
+            <span className="font-bold tracking-widest uppercase text-xs">Advancing 3rd Place Teams (3Q)</span>
+            <div className={`text-lg font-black px-3 py-1 rounded-full ${total3Q === 8 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-white'}`}>
+              {total3Q} / 8
+            </div>
+          </div>
         </div>
 
         {/* Fixed Save Bar - Hidden when viewing others */}
