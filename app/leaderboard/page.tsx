@@ -145,29 +145,29 @@ export default function Leaderboard() {
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[800px] whitespace-nowrap text-left">
+            <table className="w-full min-w-[700px] whitespace-nowrap text-left">
               <thead className="bg-slate-950/50 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-800">
                 <tr>
-                  <th className="px-6 py-5 font-bold w-16 text-center">Rank</th>
-                  <th className="px-6 py-5 font-bold">Player</th>
+                  <th className="px-3 py-2 font-bold w-12 text-center">Rank</th>
+                  <th className="px-3 py-2 font-bold">Player</th>
                   
-                  <th className="px-3 py-5 font-bold text-center border-l border-slate-800/50 leading-tight">Group Stage<br/>Advancing<br/><span className="text-[9px] text-emerald-500/70 lowercase tracking-normal">(+3/ea &bull; max 96)</span></th>
-                  <th className="px-3 py-5 font-bold text-center border-r border-slate-800/50 leading-tight">Group Stage<br/>Exact<br/><span className="text-[9px] text-amber-500/70 lowercase tracking-normal">(+1/ea &bull; max 48)</span></th>
+                  <th className="px-2 py-2 font-bold text-center border-l border-slate-800/50 leading-tight text-xs">Group Stage<br/>Advancing<br/><span className="text-[8px] text-emerald-500/70 lowercase tracking-normal">(+3/ea)</span></th>
+                  <th className="px-2 py-2 font-bold text-center border-r border-slate-800/50 leading-tight text-xs">Group Stage<br/>Exact<br/><span className="text-[8px] text-amber-500/70 lowercase tracking-normal">(+1/ea)</span></th>
                   
-                  <th className="px-2 py-5 font-bold text-center text-slate-500 leading-tight">R16<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+3/ea &bull; max 48)</span></th>
-                  <th className="px-2 py-5 font-bold text-center text-slate-500 leading-tight">QF<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+7/ea &bull; max 56)</span></th>
-                  <th className="px-2 py-5 font-bold text-center text-slate-500 leading-tight">SF<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+15/ea &bull; max 60)</span></th>
-                  <th className="px-2 py-5 font-bold text-center text-slate-500 leading-tight">F<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+20/ea &bull; max 40)</span></th>
-                  <th className="px-2 py-5 font-bold text-center text-slate-500 leading-tight">CHAMP<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+25 &bull; max 25)</span></th>
+                  <th className="px-1.5 py-2 font-bold text-center text-slate-500 leading-tight text-xs">R16<br/><span className="text-[8px] text-slate-600 lowercase tracking-normal">(+3)</span></th>
+                  <th className="px-1.5 py-2 font-bold text-center text-slate-500 leading-tight text-xs">QF<br/><span className="text-[8px] text-slate-600 lowercase tracking-normal">(+7)</span></th>
+                  <th className="px-1.5 py-2 font-bold text-center text-slate-500 leading-tight text-xs">SF<br/><span className="text-[8px] text-slate-600 lowercase tracking-normal">(+15)</span></th>
+                  <th className="px-1.5 py-2 font-bold text-center text-slate-500 leading-tight text-xs">F<br/><span className="text-[8px] text-slate-600 lowercase tracking-normal">(+20)</span></th>
+                  <th className="px-1.5 py-2 font-bold text-center text-slate-500 leading-tight text-xs">CHAMP<br/><span className="text-[8px] text-slate-600 lowercase tracking-normal">(+25)</span></th>
                   
-                  <th className="px-6 py-5 font-black text-white text-right text-base border-l border-slate-800/50">Total Score</th>
+                  <th className="sticky right-0 px-3 py-2 font-black text-white text-right text-sm border-l border-slate-800/50 bg-slate-950/80 backdrop-blur z-10">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
                 {leaderboard.map((user, index) => (
                   <tr key={user.id} className="hover:bg-slate-800/30 transition-colors group">
-                    <td className="px-6 py-4 text-center">
-                      <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${
+                    <td className="px-3 py-2 text-center">
+                      <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full font-bold text-xs ${
                         index === 0 ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(245,158,11,0.4)]' :
                         index === 1 ? 'bg-slate-300 text-slate-900' :
                         index === 2 ? 'bg-orange-700 text-white' :
@@ -176,34 +176,33 @@ export default function Leaderboard() {
                         {index + 1}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-bold text-white text-lg">{user.name}</td>
+                    <td className="px-3 py-2 font-bold text-white text-sm">{user.name}</td>
                     
-                    <td className="px-3 py-4 text-center text-slate-300 font-mono border-l border-slate-800/50">
-                      {user.correctAdvancing * 3} <span className="text-[10px] text-slate-600">/ 96</span>
+                    <td className="px-2 py-2 text-center text-slate-300 font-mono text-sm border-l border-slate-800/50">
+                      {user.correctAdvancing * 3}
                     </td>
-                    <td className="px-3 py-4 text-center text-slate-300 font-mono border-r border-slate-800/50">
-                      {user.exactPlacements} <span className="text-[10px] text-slate-600">/ 48</span>
+                    <td className="px-2 py-2 text-center text-slate-300 font-mono text-sm border-r border-slate-800/50">
+                      {user.exactPlacements}
                     </td>
                     
-                    <td className="px-2 py-4 text-center text-slate-300 font-mono">
-                      {user.p2RoundScores['R32']} <span className="text-[10px] text-slate-700">/ 48</span>
+                    <td className="px-1.5 py-2 text-center text-slate-300 font-mono text-sm">
+                      {user.p2RoundScores['R32']}
                     </td>
-                    <td className="px-2 py-4 text-center text-slate-300 font-mono">
-                      {user.p2RoundScores['R16']} <span className="text-[10px] text-slate-700">/ 56</span>
+                    <td className="px-1.5 py-2 text-center text-slate-300 font-mono text-sm">
+                      {user.p2RoundScores['R16']}
                     </td>
-                    <td className="px-2 py-4 text-center text-slate-300 font-mono">
-                      {user.p2RoundScores['QF']} <span className="text-[10px] text-slate-700">/ 60</span>
+                    <td className="px-1.5 py-2 text-center text-slate-300 font-mono text-sm">
+                      {user.p2RoundScores['QF']}
                     </td>
-                    <td className="px-2 py-4 text-center text-slate-300 font-mono">
-                      {user.p2RoundScores['SF']} <span className="text-[10px] text-slate-700">/ 40</span>
+                    <td className="px-1.5 py-2 text-center text-slate-300 font-mono text-sm">
+                      {user.p2RoundScores['SF']}
                     </td>
-                    <td className="px-2 py-4 text-center text-amber-500 font-mono">
-                      {user.p2RoundScores['CHAMPION']} <span className="text-[10px] text-amber-500/30">/ 25</span>
+                    <td className="px-1.5 py-2 text-center text-amber-500 font-mono text-sm">
+                      {user.p2RoundScores['CHAMPION']}
                     </td>
 
-                    <td className="px-6 py-4 text-right border-l border-slate-800/50 bg-slate-950/30">
-                      <span className="font-black text-2xl text-emerald-400 group-hover:text-emerald-300 transition-colors">{user.totalPoints}</span>
-                      <span className="text-xs font-bold text-slate-500 ml-1">pts</span>
+                    <td className="sticky right-0 px-3 py-2 text-right border-l border-slate-800/50 bg-slate-950/80 backdrop-blur z-10">
+                      <span className="font-black text-lg text-emerald-400 group-hover:text-emerald-300 transition-colors">{user.totalPoints}</span>
                     </td>
                   </tr>
                 ))}
