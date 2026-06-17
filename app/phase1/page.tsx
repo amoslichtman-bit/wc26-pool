@@ -243,7 +243,7 @@ export default function Phase1Picks() {
                value={viewingUserId}
                onChange={(e) => setViewingUserId(e.target.value)}
              >
-               {user && <option value={user.id}>🌟 My Picks ({user.email || 'Authenticated'})</option>}
+               {user && <option value={user.id}>🌟 My Picks </option>}
                <optgroup label="Pool Participants">
                  {profiles.filter(p => p.id !== user?.id).map(p => (
                    <option key={p.id} value={p.id}>{p.display_name || 'Unnamed Player'}</option>
