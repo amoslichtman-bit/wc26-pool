@@ -101,7 +101,9 @@ export default function AdminDashboard() {
       if (!error) fetchProfiles();
       else alert("Error removing admin: " + error.message);
     } else {
-      const { error } = await supabase.from('user_roles').insert({ user_id: userId, role: 'admin' });
+      const { error } = await supabase.from('user_roles').upsert([
+        { user_id: userId, role: 'admin' }
+      ], { onConflict: 'user_id' });
       if (!error) fetchProfiles();
       else alert("Error assigning admin: " + error.message);
     }
