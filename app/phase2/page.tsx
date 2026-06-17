@@ -147,7 +147,7 @@ export default function Home() {
           groups.forEach((group: any) => {
             group.table.forEach((row: any, idx: number) => {
               const apiName = row.team.name;
-              const API_MAP: Record<string, string> = { "United States": "United States", "USA": "United States", "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Czech Republic": "Czechia", "Korea Republic": "South Korea", "Congo DR": "DR Congo", "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde" };
+              const API_MAP: Record<string, string> = { "United States": "United States", "USA": "United States", "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina", "Czech Republic": "Czechia", "Korea Republic": "South Korea", "Congo DR": "DR Congo", "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde" };
               const teamName = API_MAP[apiName] || apiName;
               const groupLetter = TEAM_TO_GROUP[teamName];
               

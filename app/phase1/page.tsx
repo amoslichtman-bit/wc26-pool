@@ -108,9 +108,9 @@ export default function Phase1Picks() {
                 const apiName = teamRow.team.name;
                 const API_TO_SHEET_MAP: Record<string, string> = {
                   "United States": "United States", "USA": "United States",
-                  "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Czech Republic": "Czechia",
-                  "Korea Republic": "South Korea", "Congo DR": "DR Congo",
-                  "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde"
+                  "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina",
+                  "Czech Republic": "Czechia", "Korea Republic": "South Korea", "Congo DR": "DR Congo",
+                  "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde"
                 };
                 const translatedName = API_TO_SHEET_MAP[apiName] || apiName;
                 // -> Added gd to mapped API results
@@ -316,7 +316,7 @@ export default function Phase1Picks() {
             );
           })}
         </div>
-        
+
         {/* Floating 3Q Tracker */}
         <div className="flex justify-center mb-10">
           <div className={`px-6 py-3 rounded-full border shadow-xl flex items-center space-x-3 transition-colors ${

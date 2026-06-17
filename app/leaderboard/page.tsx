@@ -38,9 +38,9 @@ export default function Leaderboard() {
                 const apiName = row.team.name;
                 const API_TO_SHEET_MAP: Record<string, string> = {
                   "United States": "United States", "USA": "United States",
-                  "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Czech Republic": "Czechia",
-                  "Korea Republic": "South Korea", "Congo DR": "DR Congo",
-                  "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde"
+                  "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina",
+                  "Czech Republic": "Czechia", "Korea Republic": "South Korea", "Congo DR": "DR Congo",
+                  "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde"
                 };
                 const teamName = API_TO_SHEET_MAP[apiName] || apiName;
                 
