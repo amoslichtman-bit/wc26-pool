@@ -402,7 +402,7 @@ export default function Home() {
                  value={viewingUserId}
                  onChange={(e) => setViewingUserId(e.target.value)}
                >
-                 {user && <option value={user.id}>🌟 My Bracket ({user.email || 'Authenticated'})</option>}
+                 {user && <option value={user.id}>🌟 My Bracket </option>}
                  <optgroup label="Pool Participants">
                    {profiles.filter(p => p.id !== user?.id).map(p => (
                      <option key={p.id} value={p.id}>{p.display_name || 'Unnamed Player'}</option>

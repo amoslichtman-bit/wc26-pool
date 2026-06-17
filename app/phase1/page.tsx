@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation'; 
 
 export const dynamic = 'force-dynamic';
@@ -29,6 +29,7 @@ export default function Phase1Picks() {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [allPicks, setAllPicks] = useState<Record<string, Record<string, string>>>({});
   const [picks, setPicks] = useState<{ [team: string]: string }>({});
+  // -> Added gd to state for tiebreakers
   const [liveStandings, setLiveStandings] = useState<{ [team: string]: { w: number, d: number, l: number, pts: number, gd: number } }>({});
   
   // View & Security States
@@ -112,7 +113,7 @@ export default function Phase1Picks() {
                   "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde"
                 };
                 const translatedName = API_TO_SHEET_MAP[apiName] || apiName;
-                
+                // -> Added gd to mapped API results
                 standingsMap[translatedName] = { 
                     w: teamRow.won, 
                     d: teamRow.lost, 
@@ -217,9 +218,9 @@ export default function Phase1Picks() {
   return (
     <main className="min-h-screen p-4 sm:p-8 bg-slate-950 text-slate-200 font-sans pb-32">
       <div className="max-w-[1400px] mx-auto">
-        
+
         {/* Global Scoring Constraints Banner */}
-        <div className="max-w-3xl mx-auto mb-6 mt-4 bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-start space-x-4">
+        <div className="max-w-3xl mx-auto mb-6 bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-start space-x-4">
           <div className="mt-1 flex-shrink-0">
             <span className="relative flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -259,9 +260,22 @@ export default function Phase1Picks() {
            )}
         </div>
 
+        {/* Floating 3Q Tracker */}
+        <div className="sticky top-4 z-50 flex justify-center mb-10">
+          <div className={`px-6 py-3 rounded-full border shadow-xl flex items-center space-x-3 transition-colors ${
+            total3Q === 8 ? 'bg-emerald-900/50 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-300'
+          }`}>
+            <span className="font-bold tracking-widest uppercase text-xs">Advancing 3rd Place Teams (3Q)</span>
+            <div className={`text-lg font-black px-3 py-1 rounded-full ${total3Q === 8 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-white'}`}>
+              {total3Q} / 8
+            </div>
+          </div>
+        </div>
+
         {/* The 12 Tournament Groups */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-10">
           {TOURNAMENT_GROUPS.map(group => {
+            // -> Added dynamic sorting logic here
             const sortedTeams = [...group.teams].sort((a, b) => {
               const recordA = liveStandings[a] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
               const recordB = liveStandings[b] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
@@ -315,23 +329,11 @@ export default function Phase1Picks() {
           })}
         </div>
 
-        {/* Repositioned Static 3Q Tracker at the bottom */}
-        <div className="flex justify-center mb-16">
-          <div className={`px-4 py-2 rounded-full border shadow-sm flex items-center space-x-2 transition-colors ${
-            total3Q === 8 ? 'bg-emerald-900/50 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-800 text-slate-400'
-          }`}>
-            <span className="font-bold tracking-widest uppercase text-[10px]">Advancing 3rd Place Teams (3Q)</span>
-            <div className={`text-sm font-black px-2 py-0.5 rounded-full ${total3Q === 8 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-white'}`}>
-              {total3Q} / 8
-            </div>
-          </div>
-        </div>
-
         {/* Fixed Save Bar - Hidden when viewing others */}
         {!isViewingOther && (
           <div className="fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-md border-t border-slate-800 p-4 z-40">
             <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center">
-              <div className="mb-3 sm:mb-0 text-center sm:text-left">
+              <div className="mb-3 sm:mb-0">
                 {!user ? (
                   <span className="text-red-400 font-semibold text-sm">Please log in to save your rankings.</span>
                 ) : saveStatus === 'success' ? (
