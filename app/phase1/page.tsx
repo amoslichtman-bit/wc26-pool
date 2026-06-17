@@ -116,8 +116,8 @@ export default function Phase1Picks() {
                 // -> Added gd to mapped API results
                 standingsMap[translatedName] = { 
                     w: teamRow.won, 
-                    d: teamRow.lost, 
-                    l: teamRow.draw, 
+                    d: teamRow.draw, 
+                    l: teamRow.lost, 
                     pts: teamRow.points, 
                     gd: teamRow.goalDifference || 0 
                 };
