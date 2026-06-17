@@ -98,14 +98,22 @@ export default function AdminDashboard() {
 
     if (isCurrentlyAdmin) {
       const { error } = await supabase.from('user_roles').delete().eq('user_id', userId).eq('role', 'admin');
-      if (!error) fetchProfiles();
-      else alert("Error removing admin: " + error.message);
+      if (!error) {
+        // keep profiles.is_admin in sync
+        const { error: profileErr } = await supabase.from('profiles').update({ is_admin: false }).eq('id', userId);
+        if (profileErr) console.warn('Failed to update profiles.is_admin:', profileErr.message || profileErr);
+        fetchProfiles();
+      } else alert("Error removing admin: " + error.message);
     } else {
       const { error } = await supabase.from('user_roles').upsert([
         { user_id: userId, role: 'admin' }
       ], { onConflict: 'user_id' });
-      if (!error) fetchProfiles();
-      else alert("Error assigning admin: " + error.message);
+      if (!error) {
+        // keep profiles.is_admin in sync
+        const { error: profileErr } = await supabase.from('profiles').update({ is_admin: true }).eq('id', userId);
+        if (profileErr) console.warn('Failed to update profiles.is_admin:', profileErr.message || profileErr);
+        fetchProfiles();
+      } else alert("Error assigning admin: " + error.message);
     }
   };
 
