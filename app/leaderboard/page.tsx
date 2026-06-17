@@ -154,11 +154,11 @@ export default function Leaderboard() {
                   <th className="px-3 py-5 font-bold text-center border-l border-slate-800/50 leading-tight">Group Stage<br/>Advancing<br/><span className="text-[9px] text-emerald-500/70 lowercase tracking-normal">(+3/ea &bull; max 96)</span></th>
                   <th className="px-3 py-5 font-bold text-center border-r border-slate-800/50 leading-tight">Group Stage<br/>Exact<br/><span className="text-[9px] text-amber-500/70 lowercase tracking-normal">(+1/ea &bull; max 48)</span></th>
                   
-                  <th className="px-2 py-5 font-bold text-center text-slate-500 hidden md:table-cell leading-tight">R16<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+3/ea &bull; max 48)</span></th>
-                  <th className="px-2 py-5 font-bold text-center text-slate-500 hidden md:table-cell leading-tight">QF<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+7/ea &bull; max 56)</span></th>
-                  <th className="px-2 py-5 font-bold text-center text-slate-500 hidden md:table-cell leading-tight">SF<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+15/ea &bull; max 60)</span></th>
-                  <th className="px-2 py-5 font-bold text-center text-slate-500 hidden md:table-cell leading-tight">F<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+20/ea &bull; max 40)</span></th>
-                  <th className="px-2 py-5 font-bold text-center text-slate-500 hidden lg:table-cell leading-tight">CHAMP<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+25 &bull; max 25)</span></th>
+                  <th className="px-2 py-5 font-bold text-center text-slate-500 leading-tight">R16<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+3/ea &bull; max 48)</span></th>
+                  <th className="px-2 py-5 font-bold text-center text-slate-500 leading-tight">QF<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+7/ea &bull; max 56)</span></th>
+                  <th className="px-2 py-5 font-bold text-center text-slate-500 leading-tight">SF<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+15/ea &bull; max 60)</span></th>
+                  <th className="px-2 py-5 font-bold text-center text-slate-500 leading-tight">F<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+20/ea &bull; max 40)</span></th>
+                  <th className="px-2 py-5 font-bold text-center text-slate-500 leading-tight">CHAMP<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+25 &bull; max 25)</span></th>
                   
                   <th className="px-6 py-5 font-black text-white text-right text-base border-l border-slate-800/50">Total Score</th>
                 </tr>
@@ -185,19 +185,19 @@ export default function Leaderboard() {
                       {user.exactPlacements} <span className="text-[10px] text-slate-600">/ 48</span>
                     </td>
                     
-                    <td className="px-2 py-4 text-center text-slate-300 font-mono hidden md:table-cell">
+                    <td className="px-2 py-4 text-center text-slate-300 font-mono">
                       {user.p2RoundScores['R32']} <span className="text-[10px] text-slate-700">/ 48</span>
                     </td>
-                    <td className="px-2 py-4 text-center text-slate-300 font-mono hidden md:table-cell">
+                    <td className="px-2 py-4 text-center text-slate-300 font-mono">
                       {user.p2RoundScores['R16']} <span className="text-[10px] text-slate-700">/ 56</span>
                     </td>
-                    <td className="px-2 py-4 text-center text-slate-300 font-mono hidden md:table-cell">
+                    <td className="px-2 py-4 text-center text-slate-300 font-mono">
                       {user.p2RoundScores['QF']} <span className="text-[10px] text-slate-700">/ 60</span>
                     </td>
-                    <td className="px-2 py-4 text-center text-slate-300 font-mono hidden md:table-cell">
+                    <td className="px-2 py-4 text-center text-slate-300 font-mono">
                       {user.p2RoundScores['SF']} <span className="text-[10px] text-slate-700">/ 40</span>
                     </td>
-                    <td className="px-2 py-4 text-center text-amber-500 font-mono hidden lg:table-cell">
+                    <td className="px-2 py-4 text-center text-amber-500 font-mono">
                       {user.p2RoundScores['CHAMPION']} <span className="text-[10px] text-amber-500/30">/ 25</span>
                     </td>
 

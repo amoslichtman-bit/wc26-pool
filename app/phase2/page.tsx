@@ -442,7 +442,7 @@ export default function Home() {
           )}
         </header>
 
-        <div className="flex space-x-6 sm:space-x-8 overflow-x-auto pb-12 pt-4 px-2 sm:px-4 items-start min-h-[75vh] hide-scrollbar snap-x touch-pan-x border-t border-slate-800/50">
+        <div className="flex space-x-6 sm:space-x-8 overflow-x-auto pb-12 pt-4 px-2 sm:px-4 items-start min-h-[75vh] hide-scrollbar border-t border-slate-800/50">
           {renderRound('R32', 'Round of 32')}
           {renderRound('R16', 'Round of 16')}
           {renderRound('QF', 'Quarterfinals')}
