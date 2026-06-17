@@ -26,7 +26,7 @@ export default function LandingPage() {
       if (session) {
         verifyProfile(session.user);
       } else {
-        setLoading(false);
+        router.push('/login');
       }
     };
     checkSession();

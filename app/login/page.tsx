@@ -13,8 +13,10 @@ export default function Login() {
   const [unclaimedProfiles, setUnclaimedProfiles] = useState<any[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState('');
 
-  // Fetch unclaimed placeholders on load
+  // Fetch unclaimed placeholders when switching to sign-up mode
   useEffect(() => {
+    if (!isSignUp) return;
+    
     const fetchUnclaimed = async () => {
       const { data } = await supabase
         .from('profiles')
@@ -25,7 +27,7 @@ export default function Login() {
       if (data) setUnclaimedProfiles(data);
     };
     fetchUnclaimed();
-  }, []);
+  }, [isSignUp]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
