@@ -8,21 +8,6 @@ import { useRouter } from 'next/navigation';
 const GROUP_STAGE_END_TIME = new Date('2026-06-28T00:10:00-04:00').getTime();
 const KNOCKOUT_START_TIME = new Date('2026-06-28T15:00:00-04:00').getTime();
 
-const TEAM_TO_GROUP: Record<string, string> = {
-  'Czechia': 'A', 'Mexico': 'A', 'South Africa': 'A', 'South Korea': 'A',
-  'Bosnia & Herzigovina': 'B', 'Canada': 'B', 'Switzerland': 'B', 'Qatar': 'B',
-  'Brazil': 'C', 'Haiti': 'C', 'Morocco': 'C', 'Scotland': 'C',
-  'Australia': 'D', 'Paraguay': 'D', 'Turkey': 'D', 'United States': 'D',
-  'Curacao': 'E', 'Ecuador': 'E', 'Germany': 'E', 'Ivory Coast': 'E',
-  'Japan': 'F', 'Netherlands': 'F', 'Sweden': 'F', 'Tunisia': 'F',
-  'Belgium': 'G', 'Egypt': 'G', 'Iran': 'G', 'New Zealand': 'G',
-  'Cape Verde': 'H', 'Saudi Arabia': 'H', 'Spain': 'H', 'Uruguay': 'H',
-  'France': 'I', 'Iraq': 'I', 'Norway': 'I', 'Senegal': 'I',
-  'Algeria': 'J', 'Argentina': 'J', 'Austria': 'J', 'Jordan': 'J',
-  'Colombia': 'K', 'DR Congo': 'K', 'Portugal': 'K', 'Uzbekistan': 'K',
-  'Croatia': 'L', 'England': 'L', 'Ghana': 'L', 'Panama': 'L'
-};
-
 const INITIAL_MATCHES = [
   { id: 1, round: 'R32', nextMatchId: 17, slot: 'home', teamA: '1st Place Group A', teamB: '3Q Groups C/D/E', winner: null },
   { id: 2, round: 'R32', nextMatchId: 17, slot: 'away', teamA: '2nd Place Group B', teamB: '2nd Place Group C', winner: null },
@@ -56,34 +41,6 @@ const INITIAL_MATCHES = [
   { id: 30, round: 'SF', nextMatchId: 31, slot: 'away', teamA: '', teamB: '', winner: null },
   { id: 31, round: 'F', nextMatchId: null, slot: null, teamA: '', teamB: '', winner: null },
 ];
-
-function resolveThirdPlaceMatrix(advancingThirds: any[]) {
-  const slots = [
-    { matchId: 1, allowed: ['C', 'D', 'E'] }, { matchId: 3, allowed: ['A', 'B', 'F'] },
-    { matchId: 5, allowed: ['G', 'H', 'I'] }, { matchId: 7, allowed: ['J', 'K', 'L'] },
-    { matchId: 9, allowed: ['A', 'C', 'D'] }, { matchId: 11, allowed: ['B', 'E', 'F'] },
-    { matchId: 13, allowed: ['G', 'I', 'J'] }, { matchId: 15, allowed: ['H', 'K', 'L'] },
-  ];
-  let assignments: Record<number, string> = {};
-
-  function solve(index: number): boolean {
-    if (index === slots.length) return true;
-    const slot = slots[index];
-    for (let i = 0; i < advancingThirds.length; i++) {
-      const t = advancingThirds[i];
-      if (!t.used && slot.allowed.includes(t.group)) {
-        t.used = true;
-        assignments[slot.matchId] = t.team;
-        if (solve(index + 1)) return true;
-        t.used = false;
-        delete assignments[slot.matchId];
-      }
-    }
-    return false;
-  }
-  solve(0);
-  return assignments;
-}
 
 export default function Home() {
   const router = useRouter();
@@ -136,45 +93,49 @@ export default function Home() {
       if (allPicksData) setAllPhase2Picks(allPicksData);
 
       let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_MATCHES));
+      
       try {
-        const apiRes = await fetch('/api/standings');
+        // Fetch from the new specific knockout matches endpoint
+        const apiRes = await fetch('/api/matches');
+        
         if (apiRes.ok) {
           const data = await apiRes.json();
-          const groups = data.standings.filter((s: any) => s.type === 'TOTAL');
-          let firsts: Record<string, string> = {};
-          let seconds: Record<string, string> = {};
-          let thirds: any[] = [];
           
-          groups.forEach((group: any) => {
-            group.table.forEach((row: any, idx: number) => {
-              const apiName = row.team.name;
-              const API_MAP: Record<string, string> = { "United States": "United States", "USA": "United States", "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina", "Czech Republic": "Czechia", "Korea Republic": "South Korea", "Congo DR": "DR Congo", "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde" };
-              const teamName = API_MAP[apiName] || apiName;
-              const groupLetter = TEAM_TO_GROUP[teamName];
-              
-              const displayName = teamName;
+          if (data.matches && data.matches.length > 0) {
+            // Filter only for the Round of 32
+            const r32Matches = data.matches.filter((m: any) => m.stage === 'LAST_32');
+            
+            const API_MAP: Record<string, string> = { 
+              "United States": "United States", "USA": "United States", 
+              "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina", 
+              "Czech Republic": "Czechia", "Korea Republic": "South Korea", 
+              "Congo DR": "DR Congo", "Côte d'Ivoire": "Ivory Coast", 
+              "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde" 
+            };
 
-              if (idx === 0) firsts[groupLetter] = displayName;
-              if (idx === 1) seconds[groupLetter] = displayName;
-              if (idx === 2) thirds.push({ group: groupLetter, team: displayName, pts: row.points, gd: row.goalDifference, used: false });
+            dynamicMatches = dynamicMatches.map((m: any) => {
+              if (m.round === 'R32') {
+                // The API matches are mapped chronologically to your IDs 1-16
+                const apiMatch = r32Matches[m.id - 1];
+                
+                if (apiMatch) {
+                  // If the team name is populated by the API, use it. Otherwise, keep the placeholder.
+                  const rawTeamA = apiMatch.homeTeam?.name;
+                  const rawTeamB = apiMatch.awayTeam?.name;
+                  
+                  const teamA_name = rawTeamA ? (API_MAP[rawTeamA] || rawTeamA) : m.teamA;
+                  const teamB_name = rawTeamB ? (API_MAP[rawTeamB] || rawTeamB) : m.teamB;
+
+                  return { ...m, teamA: teamA_name, teamB: teamB_name };
+                }
+              }
+              return m;
             });
-          });
-
-          thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd);
-          const advancingThirds = thirds.slice(0, 8);
-          const mappedThirds = resolveThirdPlaceMatrix(advancingThirds);
-
-          dynamicMatches = dynamicMatches.map((m: any) => {
-            let newA = m.teamA;
-            let newB = m.teamB;
-            if (m.teamA.includes('1st Place Group')) newA = firsts[m.teamA.slice(-1)] || m.teamA;
-            if (m.teamA.includes('2nd Place Group')) newA = seconds[m.teamA.slice(-1)] || m.teamA;
-            if (m.teamB.includes('2nd Place Group')) newB = seconds[m.teamB.slice(-1)] || m.teamB;
-            if (m.teamB.includes('3Q') && mappedThirds[m.id]) newB = mappedThirds[m.id];
-            return { ...m, teamA: newA, teamB: newB };
-          });
+          }
         }
-      } catch(e) { console.warn("API load failed"); }
+      } catch(e) { 
+        console.warn("Matches API load failed", e); 
+      }
 
       setBaseBracket(dynamicMatches);
 
@@ -277,7 +238,7 @@ export default function Home() {
 
     const timer = setTimeout(() => {
       performSilentSave();
-    }, 1000); // Saves 1 second after user finishes their last click/typing
+    }, 1000); 
 
     return () => clearTimeout(timer);
   }, [matches, champion, tiebreakerScore, hasUnsavedChanges]);
@@ -383,7 +344,7 @@ export default function Home() {
               </div>
             ) : (
               <div className="bg-slate-800 border border-slate-700 text-slate-400 px-6 py-2 rounded-lg text-sm font-bold flex items-center space-x-2 shadow-lg text-center">
-                 <span>⏳ This is a Preliminary Bracket Based on Curent Standings.</span>
+                 <span>⏳ Bracket Waiting on API Results.</span>
               </div>
             )}
             
