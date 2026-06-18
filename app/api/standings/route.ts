@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-
+export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const res = await fetch('https://api.football-data.org/v4/competitions/WC/standings', {
