@@ -35,7 +35,14 @@ export default function LandingPage() {
   const verifyProfile = async (user: any) => {
     setCurrentUser(user);
     // Check if this user already has a fully linked profile (by auth_id or email)
-    const { data: profile } = await supabase.from('profiles').select('id').or(`auth_id.eq.${user.id},email.eq.${user.email}`).single();
+    const { data: profile, error } = await supabase.from('profiles').select('id').or(`auth_id.eq.${user.id},email.eq.${user.email}`).single();
+
+    if (error) {
+      console.error('Profile lookup error:', error);
+      setMessage({ text: `Error: ${error.message}`, type: 'error' });
+      setLoading(false);
+      return;
+    }
 
     if (profile) {
       router.push('/phase1');
