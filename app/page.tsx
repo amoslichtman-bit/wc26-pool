@@ -34,8 +34,9 @@ export default function LandingPage() {
 
   const verifyProfile = async (user: any) => {
     setCurrentUser(user);
-    // Check if this user already has a fully linked profile (by auth_id or email)
-    const { data: profile, error } = await supabase.from('profiles').select('id').or(`auth_id.eq.${user.id},email.eq.${user.email}`).single();
+    
+    // Try auth_id first (simpler query)
+    const { data: profile, error } = await supabase.from('profiles').select('id').eq('auth_id', user.id).single();
 
     if (error) {
       console.error('Profile lookup error:', error);
@@ -48,7 +49,13 @@ export default function LandingPage() {
       router.push('/phase1');
     } else {
       // Fetch profiles that have not been claimed yet (they don't have an email)
-      const { data: availableProfiles } = await supabase.from('profiles').select('id, display_name').is('email', null).order('display_name');
+      const { data: availableProfiles, error: fetchErr } = await supabase.from('profiles').select('id, display_name').is('email', null).order('display_name');
+      if (fetchErr) {
+        console.error('Unclaimed profiles error:', fetchErr);
+        setMessage({ text: `Error fetching profiles: ${fetchErr.message}`, type: 'error' });
+        setLoading(false);
+        return;
+      }
       setUnclaimedProfiles(availableProfiles || []);
       setNeedsClaim(true);
       setLoading(false);
