@@ -29,7 +29,6 @@ export default function Phase1Picks() {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [allPicks, setAllPicks] = useState<Record<string, Record<string, string>>>({});
   const [picks, setPicks] = useState<{ [team: string]: string }>({});
-  // -> Added gd to state for tiebreakers
   const [liveStandings, setLiveStandings] = useState<{ [team: string]: { w: number, d: number, l: number, pts: number, gd: number } }>({});
   
   // View & Security States
@@ -37,7 +36,7 @@ export default function Phase1Picks() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   
-  // New Admin and Lock States
+  // Admin and Lock States
   const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [adminEditMode, setAdminEditMode] = useState(false);
@@ -51,7 +50,7 @@ export default function Phase1Picks() {
 
   useEffect(() => {
     const fetchAllData = async () => {
-      // 1. Fetch auth session first
+      // 1. Fetch auth session
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.push('/');
@@ -62,7 +61,7 @@ export default function Phase1Picks() {
       setUser(currentUser);
       setViewingUserId(currentUser.id);
 
-      // 2. Fetch Profiles (now including the admin and lock status)
+      // 2. Fetch Profiles
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('id, display_name, email, is_admin, group_picks_submitted, is_locked')
@@ -74,7 +73,7 @@ export default function Phase1Picks() {
         setProfiles(profileData);
       }
 
-      // 3. Find current user profile separately when needed
+      // 3. Find current user profile
       let userProfile: any = profileData?.find(p => p.id === currentUser.id);
       if (!userProfile) {
         const { data: currentUserProfile, error: currentUserProfileError } = await supabase
@@ -132,7 +131,6 @@ export default function Phase1Picks() {
                   "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde"
                 };
                 const translatedName = API_TO_SHEET_MAP[apiName] || apiName;
-                // -> Added gd to mapped API results
                 standingsMap[translatedName] = { 
                     w: teamRow.won, 
                     d: teamRow.draw, 
@@ -160,7 +158,6 @@ export default function Phase1Picks() {
   }, [currentUserIsAdmin, adminEditMode, isViewingOther, allPicks, viewingUserId]);
 
   const handleSelect = (team: string, newRank: string) => {
-    // Block edits if viewing someone else, unless admin edit mode is enabled
     if (isViewingOther && !(currentUserIsAdmin && adminEditMode)) return;
     if (isLocked && !(currentUserIsAdmin && adminEditMode)) return;
     
@@ -196,7 +193,6 @@ export default function Phase1Picks() {
 
     const targetUserIdToSave = isViewingOther && currentUserIsAdmin && adminEditMode ? viewingUserId : user.id;
 
-    // The Prompt Modal
     const confirmSubmit = window.confirm(
       "Are you ready to lock in your Group Stage Bracket? Once submitted, your picks cannot be changed."
     );
@@ -212,14 +208,12 @@ export default function Phase1Picks() {
     });
 
     try {
-      // 1. Save Picks
       await supabase.from('phase_1_picks').delete().eq('user_id', targetUserIdToSave);
       if (formattedPicks.length > 0) {
         const { error } = await supabase.from('phase_1_picks').insert(formattedPicks);
         if (error) throw error;
       }
       
-      // 2. Lock Profile
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ group_picks_submitted: true, is_locked: true })
@@ -227,7 +221,6 @@ export default function Phase1Picks() {
 
       if (profileError) throw profileError;
 
-      // 3. Update UI states
       setAllPicks(prev => ({ ...prev, [targetUserIdToSave]: picks }));
       setIsLocked(true);
       setSaveStatus('success');
@@ -242,6 +235,33 @@ export default function Phase1Picks() {
   };
 
   const total3Q = Object.values(displayPicks).filter(rank => rank === '3Q').length;
+
+  // --- GLOBAL 3RD PLACE & GROUP SORTING LOGIC ---
+  const groupsWithStandings = TOURNAMENT_GROUPS.map(group => {
+    const sortedTeams = [...group.teams].sort((a, b) => {
+      const recordA = liveStandings[a] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
+      const recordB = liveStandings[b] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
+      
+      if (recordB.pts !== recordA.pts) return recordB.pts - recordA.pts; 
+      if (recordB.gd !== recordA.gd) return recordB.gd - recordA.gd;     
+      if (recordB.w !== recordA.w) return recordB.w - recordA.w;         
+      return 0;                                                          
+    });
+    return { ...group, sortedTeams };
+  });
+
+  const allThirdPlaceTeams = groupsWithStandings.map(g => g.sortedTeams[2]).filter(Boolean);
+  allThirdPlaceTeams.sort((a, b) => {
+    const recA = liveStandings[a] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
+    const recB = liveStandings[b] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
+    if (recB.pts !== recA.pts) return recB.pts - recA.pts;
+    if (recB.gd !== recA.gd) return recB.gd - recA.gd;
+    if (recB.w !== recA.w) return recB.w - recA.w;
+    return 0;
+  });
+  
+  const actual3QTeams = new Set(allThirdPlaceTeams.slice(0, 8));
+  // ----------------------------------------------
 
   return (
     <main className="min-h-screen p-4 sm:p-8 bg-slate-950 text-slate-200 font-sans pb-32">
@@ -303,81 +323,74 @@ export default function Phase1Picks() {
            )}
         </div>
 
-{/* The 12 Tournament Groups */}
+        {/* The 12 Tournament Groups */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-10">
-          {TOURNAMENT_GROUPS.map(group => {
-            const sortedTeams = [...group.teams].sort((a, b) => {
-              const recordA = liveStandings[a] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
-              const recordB = liveStandings[b] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
-              
-              if (recordB.pts !== recordA.pts) return recordB.pts - recordA.pts; // 1. Points Tiebreaker
-              if (recordB.gd !== recordA.gd) return recordB.gd - recordA.gd;     // 2. Goal Difference Tiebreaker
-              if (recordB.w !== recordA.w) return recordB.w - recordA.w;         // 3. Wins Tiebreaker
-              return 0;                                                          // 4. Default fallback
-            });
+          {groupsWithStandings.map(group => (
+            <div key={group.name} className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col h-full">
+              <h2 className="text-lg font-bold text-emerald-400 mb-4">{group.name}</h2>
+              <div className="space-y-4 flex-grow">
+                {group.sortedTeams.map((team, index) => {
+                  const record = liveStandings[team] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
+                  const inputIsDisabled = (isViewingOther && !(currentUserIsAdmin && adminEditMode)) || (isLocked && !(currentUserIsAdmin && adminEditMode));
+                  
+                  const currentPick = displayPicks[team];
+                  let selectColorClasses = 'border-slate-700 text-white';
 
-            return (
-              <div key={group.name} className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col h-full">
-                <h2 className="text-lg font-bold text-emerald-400 mb-4">{group.name}</h2>
-                <div className="space-y-4 flex-grow">
-                  {sortedTeams.map((team, index) => {
-                    const record = liveStandings[team] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
-                    
-                    // Check if the dropdown should be disabled
-                    const inputIsDisabled = (isViewingOther && !(currentUserIsAdmin && adminEditMode)) || (isLocked && !(currentUserIsAdmin && adminEditMode));
-                    
-                    // Determine match status for coloring based on live standings
-                    const currentPick = displayPicks[team];
-                    let isMatch = null;
-                    if (currentPick) {
-                      if (currentPick === '1' && index === 0) isMatch = true;
-                      else if (currentPick === '2' && index === 1) isMatch = true;
-                      else if ((currentPick === '3Q' || currentPick === '3') && index === 2) isMatch = true;
-                      else if (currentPick === '4' && index === 3) isMatch = true;
-                      else isMatch = false;
-                    }
+                  if (currentPick) {
+                    // 1. Determine the team's actual placement string based on live standings
+                    let actualPlacement = '';
+                    if (index === 0) actualPlacement = '1';
+                    else if (index === 1) actualPlacement = '2';
+                    else if (index === 2) actualPlacement = actual3QTeams.has(team) ? '3Q' : '3';
+                    else if (index === 3) actualPlacement = '4';
 
-                    // Assign dynamic colors based on match accuracy
-                    let selectColorClasses = 'border-slate-700 text-white'; // default
-                    if (isMatch === true) {
+                    // 2. Determine advancement outcomes (Round of 32)
+                    const predictedAdvances = ['1', '2', '3Q'].includes(currentPick);
+                    const actualAdvances = ['1', '2', '3Q'].includes(actualPlacement);
+
+                    // 3. Assign dynamic classes based on match logic
+                    if (currentPick === actualPlacement) {
+                      // Correctly Placed (Green)
                       selectColorClasses = 'border-emerald-500 text-emerald-400 font-bold bg-emerald-950/30';
-                    } else if (isMatch === false) {
+                    } else if (predictedAdvances === actualAdvances) {
+                      // Correct on outcome (advancement/elimination), but wrong placement (Yellow)
+                      selectColorClasses = 'border-yellow-500 text-yellow-400 font-bold bg-yellow-950/30';
+                    } else {
+                      // Incorrect on advancement outcome (Red)
                       selectColorClasses = 'border-red-500 text-red-400 font-bold bg-red-950/30';
                     }
+                  }
 
-                    return (
-                      <div key={team} className="flex flex-col justify-center bg-slate-950 p-3 rounded-lg border border-slate-800/50">
-                        <div className="flex justify-between items-center mb-2">
-                          {/* Increased font size to text-base/text-lg for better readability */}
-                          <span className="font-bold text-slate-100 text-base md:text-lg truncate pr-2">{team}</span>
-                          
-                          {/* Enlarged select input with dynamic color classes */}
-                          <select 
-                            disabled={inputIsDisabled}
-                            className={`bg-slate-800 border-2 rounded-lg p-2 text-sm focus:ring-emerald-500 focus:border-emerald-500 outline-none w-32 disabled:opacity-70 disabled:cursor-not-allowed transition-colors ${selectColorClasses}`}
-                            value={currentPick || ''}
-                            onChange={(e) => handleSelect(team, e.target.value)}
-                          >
-                            <option value="" disabled>Rank</option>
-                            <option value="1">1st</option>
-                            <option value="2">2nd</option>
-                            <option value="3Q">3Qual</option>
-                            <option value="3">3Elim</option>
-                            <option value="4">4</option>
-                          </select>
-                        </div>
-                        {/* Increased record text size from xs to sm */}
-                        <div className="flex justify-between items-center text-sm text-slate-400">
-                          <span>W-D-L: {record.w}-{record.d}-{record.l}</span>
-                          <span className="font-bold text-slate-300">{record.pts} pts</span>
-                        </div>
+                  return (
+                    <div key={team} className="flex flex-col justify-center bg-slate-950 p-3 rounded-lg border border-slate-800/50">
+                      <div className="flex justify-between items-center mb-2">
+                        {/* Larger team name font */}
+                        <span className="font-bold text-slate-100 text-base md:text-lg truncate pr-2">{team}</span>
+                        {/* Enlarged select input with dynamic color classes */}
+                        <select 
+                          disabled={inputIsDisabled}
+                          className={`bg-slate-800 border-2 rounded-lg p-2 text-sm focus:ring-emerald-500 focus:border-emerald-500 outline-none w-32 disabled:opacity-70 disabled:cursor-not-allowed transition-colors ${selectColorClasses}`}
+                          value={currentPick || ''}
+                          onChange={(e) => handleSelect(team, e.target.value)}
+                        >
+                          <option value="" disabled>Rank</option>
+                          <option value="1">1st</option>
+                          <option value="2">2nd</option>
+                          <option value="3Q">3Qual</option>
+                          <option value="3">3Elim</option>
+                          <option value="4">4</option>
+                        </select>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="flex justify-between items-center text-base text-slate-300">
+                        <span className="font-medium">W-D-L: {record.w}-{record.d}-{record.l}</span>
+                        <span className="font-bold text-slate-100">{record.pts} pts</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
 
         {/* Floating 3Q Tracker */}
@@ -419,6 +432,23 @@ export default function Phase1Picks() {
             </div>
           </div>
         )}
+
+        <div className="max-w-5xl mx-auto mt-6 text-sm bg-slate-900 border border-slate-800 rounded-2xl p-4 text-slate-300">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-xs sm:text-sm">
+            <div className="inline-flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-inner"></span>
+              <span>Green = Exactly Correct (4 pts)</span>
+            </div>
+            <div className="inline-flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-yellow-500 shadow-inner"></span>
+              <span>Yellow = Advancement Correct (3 pts)</span>
+            </div>
+            <div className="inline-flex items-center gap-2">
+              <span className="h-3 w-3 rounded-full bg-red-500 shadow-inner"></span>
+              <span>Red = Incorrect</span>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   );
