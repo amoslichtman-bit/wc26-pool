@@ -250,7 +250,7 @@ export default function Home() {
   }, [viewingUserId, targetUserId, allPhase2Picks, baseBracket]);
 
   const handlePick = (matchId: number, selectedTeam: string) => {
-    const inputIsDisabled = isViewingOther || ( (isGlobalKnockoutTimeLocked || isUserLocked) && !(currentUserIsAdmin && adminEditMode) );
+    const inputIsDisabled = (isViewingOther && !(currentUserIsAdmin && adminEditMode)) || ( (isGlobalKnockoutTimeLocked || isUserLocked) && !(currentUserIsAdmin && adminEditMode) );
     if (!selectedTeam || inputIsDisabled) return;
     
     const currentMatch = matches.find(m => m.id === matchId);
@@ -323,7 +323,7 @@ export default function Home() {
 
   const renderRound = (roundName: string, title: string) => {
     const roundMatches = matches.filter(m => m.round === roundName);
-    const inputIsDisabled = isViewingOther || ( (isGlobalKnockoutTimeLocked || isUserLocked) && !(currentUserIsAdmin && adminEditMode) );
+    const inputIsDisabled = (isViewingOther && !(currentUserIsAdmin && adminEditMode)) || ( (isGlobalKnockoutTimeLocked || isUserLocked) && !(currentUserIsAdmin && adminEditMode) );
 
     return (
       <div className="flex flex-col space-y-4 min-w-[250px]">
