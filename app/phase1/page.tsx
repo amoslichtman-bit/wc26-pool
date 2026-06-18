@@ -407,15 +407,15 @@ export default function Phase1Picks() {
             <div className="flex flex-col sm:flex-row items-center gap-3 text-xs sm:text-sm text-slate-300">
               <div className="inline-flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-inner"></span>
-                <span>Green = Exactly Correct</span>
+                <span>Green = Exactly Correct - 4 Pts</span>
               </div>
               <div className="inline-flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-yellow-500 shadow-inner"></span>
-                <span>Yellow = Advancement Correct</span>
+                <span>Yellow = Advancement Correct - 3 Pts</span>
               </div>
               <div className="inline-flex items-center gap-2">
                 <span className="h-3 w-3 rounded-full bg-red-500 shadow-inner"></span>
-                <span>Red = Incorrect</span>
+                <span>Red = Incorrect - 0 Pts</span>
               </div>
             </div>
           </div>
