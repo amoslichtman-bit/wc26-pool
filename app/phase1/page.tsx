@@ -399,8 +399,8 @@ export default function Phase1Picks() {
             total3Q === 8 ? 'bg-emerald-900/50 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-300'
           }`}>
             <div className="flex items-center space-x-3">
-              <span className="font-bold tracking-widest uppercase text-xs">Advancing 3rd Place Teams (3Q)</span>
-              <div className={`text-lg font-black px-3 py-1 rounded-full ${total3Q === 8 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-white'}`}>
+              <span className="font-bold tracking-widest uppercase text-xs">Advancing 3rds (3Q)</span>
+              <div className={`text-sm md:text-lg font-black px-3 py-1 rounded-full ${total3Q === 8 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-white'}`}>
                 {total3Q} / 8
               </div>
             </div>
@@ -448,23 +448,6 @@ export default function Phase1Picks() {
             </div>
           </div>
         )}
-
-        <div className="max-w-5xl mx-auto mt-6 text-sm bg-slate-900 border border-slate-800 rounded-2xl p-4 text-slate-300">
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-xs sm:text-sm">
-            <div className="inline-flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-inner"></span>
-              <span>Green = Exactly Correct (4 pts)</span>
-            </div>
-            <div className="inline-flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full bg-yellow-500 shadow-inner"></span>
-              <span>Yellow = Advancement Correct (3 pts)</span>
-            </div>
-            <div className="inline-flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full bg-red-500 shadow-inner"></span>
-              <span>Red = Incorrect</span>
-            </div>
-          </div>
-        </div>
       </div>
     </main>
   );
