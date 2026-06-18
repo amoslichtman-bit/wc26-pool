@@ -108,6 +108,7 @@ export default function Home() {
   // Security States
   const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
   const [isUserLocked, setIsUserLocked] = useState(false);
+  const [adminEditMode, setAdminEditMode] = useState(false);
 
   const targetUserId = viewingUserId || user?.id;
   const isViewingOther = targetUserId && targetUserId !== user?.id;
@@ -249,7 +250,7 @@ export default function Home() {
   }, [viewingUserId, targetUserId, allPhase2Picks, baseBracket]);
 
   const handlePick = (matchId: number, selectedTeam: string) => {
-    const inputIsDisabled = isViewingOther || ( (isGlobalKnockoutTimeLocked || isUserLocked) && !currentUserIsAdmin );
+    const inputIsDisabled = isViewingOther || ( (isGlobalKnockoutTimeLocked || isUserLocked) && !(currentUserIsAdmin && adminEditMode) );
     if (!selectedTeam || inputIsDisabled) return;
     
     const currentMatch = matches.find(m => m.id === matchId);
@@ -271,8 +272,8 @@ export default function Home() {
 
   // Debounced Auto-Save
   useEffect(() => {
-    if (!hasUnsavedChanges || isViewingOther || !user) return;
-    if (Date.now() >= KNOCKOUT_START_TIME && !currentUserIsAdmin) return;
+    if (!hasUnsavedChanges || (!currentUserIsAdmin && isViewingOther) || !user) return;
+    if (Date.now() >= KNOCKOUT_START_TIME && !(currentUserIsAdmin && adminEditMode)) return;
 
     const timer = setTimeout(() => {
       performSilentSave();
@@ -294,14 +295,15 @@ export default function Home() {
     if (tiebreakerScore.trim() !== '') picksToInsert.push({ user_id: user.id, team_name: tiebreakerScore, predicted_round: 'TIEBREAKER' });
 
     try {
-      await supabase.from('phase_2_picks').delete().eq('user_id', user.id);
+      const saveUserId = isViewingOther && currentUserIsAdmin && adminEditMode ? targetUserId : user.id;
+      await supabase.from('phase_2_picks').delete().eq('user_id', saveUserId);
       
       if (picksToInsert.length > 0) {
-        const { error } = await supabase.from('phase_2_picks').insert(picksToInsert);
+        const { error } = await supabase.from('phase_2_picks').insert(picksToInsert.map(p => ({ ...p, user_id: saveUserId })));
         if (error) throw error;
       }
       
-      setAllPhase2Picks(prev => [...prev.filter(p => p.user_id !== user.id), ...picksToInsert]);
+      setAllPhase2Picks(prev => [...prev.filter(p => p.user_id !== saveUserId), ...picksToInsert.map(p => ({ ...p, user_id: saveUserId }))]);
       setSaveStatus('success');
     } catch (error) {
       console.error(error);
@@ -321,7 +323,7 @@ export default function Home() {
 
   const renderRound = (roundName: string, title: string) => {
     const roundMatches = matches.filter(m => m.round === roundName);
-    const inputIsDisabled = isViewingOther || ( (isGlobalKnockoutTimeLocked || isUserLocked) && !currentUserIsAdmin );
+    const inputIsDisabled = isViewingOther || ( (isGlobalKnockoutTimeLocked || isUserLocked) && !(currentUserIsAdmin && adminEditMode) );
 
     return (
       <div className="flex flex-col space-y-4 min-w-[250px]">
@@ -412,8 +414,8 @@ export default function Home() {
              </div>
              
              {isViewingOther && (
-               <div className="mt-3 sm:mt-0 bg-amber-500/10 text-amber-400 border border-amber-500/30 px-4 py-1.5 rounded-full text-xs font-bold shadow-lg">
-                 🔒 READ ONLY: {activeProfile?.display_name}'s Bracket
+               <div className={`mt-3 sm:mt-0 px-4 py-1.5 rounded-full text-xs font-bold shadow-lg ${adminEditMode ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'}`}>
+                 {adminEditMode ? `🛠 Admin editing: ${activeProfile?.display_name}'s Bracket` : `🔒 READ ONLY: ${activeProfile?.display_name}'s Bracket`}
                </div>
              )}
           </div>
@@ -426,8 +428,8 @@ export default function Home() {
                   <a href="/login" className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md transition-colors">Log In</a>
                 </div>
               ) : (
-                <div className="bg-slate-900 border border-slate-800 px-6 py-3 rounded-full flex items-center space-x-3 shadow-lg">
-                  {(isGlobalKnockoutTimeLocked || isUserLocked) && !currentUserIsAdmin ? (
+                <div className="bg-slate-900 border border-slate-800 px-6 py-3 rounded-full flex flex-col sm:flex-row items-center gap-3 shadow-lg">
+                  {(isGlobalKnockoutTimeLocked || isUserLocked) && !(currentUserIsAdmin && adminEditMode) ? (
                     <span className="text-amber-500 font-bold text-sm">🔒 Bracket is Locked</span>
                   ) : isSaving ? (
                     <span className="text-slate-400 font-bold text-sm animate-pulse">🔄 Saving changes...</span>
@@ -438,6 +440,21 @@ export default function Home() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {currentUserIsAdmin && (
+            <div className="mt-4 flex flex-col sm:flex-row items-center gap-3 text-sm text-slate-300">
+              <label className="inline-flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-full px-4 py-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={adminEditMode}
+                  onChange={(e) => setAdminEditMode(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-700 text-amber-500 focus:ring-amber-500"
+                />
+                <span className="font-semibold">Admin edit mode</span>
+              </label>
+              <span className="text-slate-400 text-xs">Enable editing while the bracket is locked.</span>
             </div>
           )}
         </header>
@@ -467,7 +484,7 @@ export default function Home() {
                    setTiebreakerScore(e.target.value);
                    setHasUnsavedChanges(true);
                  }}
-                 disabled={isViewingOther || ( (isGlobalKnockoutTimeLocked || isUserLocked) && !currentUserIsAdmin )}
+                 disabled={(isViewingOther && !(currentUserIsAdmin && adminEditMode)) || ( (isGlobalKnockoutTimeLocked || isUserLocked) && !(currentUserIsAdmin && adminEditMode) )}
                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-center text-white focus:border-amber-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                />
                <p className="text-[10px] text-slate-500 mt-2">Predict the exact score at the end of regulation/extra time.</p>

@@ -40,10 +40,13 @@ export default function Phase1Picks() {
   // New Admin and Lock States
   const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
+  const [adminEditMode, setAdminEditMode] = useState(false);
 
   // Determine if we are viewing someone else
   const isViewingOther = viewingUserId !== '' && viewingUserId !== user?.id;
-  const displayPicks = isViewingOther ? (allPicks[viewingUserId] || {}) : picks;
+  const displayPicks = isViewingOther
+    ? (currentUserIsAdmin && adminEditMode ? picks : (allPicks[viewingUserId] || {}))
+    : picks;
   const activeProfile = profiles.find(p => p.id === viewingUserId);
 
   useEffect(() => {
@@ -72,7 +75,7 @@ export default function Phase1Picks() {
       }
 
       // 3. Find current user profile separately when needed
-      let userProfile = profileData?.find(p => p.id === currentUser.id);
+      let userProfile: any = profileData?.find(p => p.id === currentUser.id);
       if (!userProfile) {
         const { data: currentUserProfile, error: currentUserProfileError } = await supabase
           .from('profiles')
@@ -150,9 +153,16 @@ export default function Phase1Picks() {
     fetchLiveStandings();
   }, [router]);
 
+  useEffect(() => {
+    if (currentUserIsAdmin && adminEditMode && isViewingOther) {
+      setPicks(allPicks[viewingUserId] || {});
+    }
+  }, [currentUserIsAdmin, adminEditMode, isViewingOther, allPicks, viewingUserId]);
+
   const handleSelect = (team: string, newRank: string) => {
-    // Block edits if viewing someone else, OR if the bracket is locked (and the user isn't an admin)
-    if (isViewingOther || (isLocked && !currentUserIsAdmin)) return; 
+    // Block edits if viewing someone else, unless admin edit mode is enabled
+    if (isViewingOther && !(currentUserIsAdmin && adminEditMode)) return;
+    if (isLocked && !(currentUserIsAdmin && adminEditMode)) return;
     
     const group = TOURNAMENT_GROUPS.find(g => g.teams.includes(team));
     if (!group) return;
@@ -182,7 +192,9 @@ export default function Phase1Picks() {
   };
 
   const saveAndLockPicks = async () => {
-    if (!user || isViewingOther) return;
+    if (!user || (isViewingOther && !(currentUserIsAdmin && adminEditMode))) return;
+
+    const targetUserIdToSave = isViewingOther && currentUserIsAdmin && adminEditMode ? viewingUserId : user.id;
 
     // The Prompt Modal
     const confirmSubmit = window.confirm(
@@ -196,12 +208,12 @@ export default function Phase1Picks() {
 
     const formattedPicks = Object.entries(picks).map(([team, placement]) => {
       const groupName = TOURNAMENT_GROUPS.find(g => g.teams.includes(team))?.name || 'Unknown';
-      return { user_id: user.id, group_name: groupName, team_name: team, placement: placement };
+      return { user_id: targetUserIdToSave, group_name: groupName, team_name: team, placement: placement };
     });
 
     try {
       // 1. Save Picks
-      await supabase.from('phase_1_picks').delete().eq('user_id', user.id);
+      await supabase.from('phase_1_picks').delete().eq('user_id', targetUserIdToSave);
       if (formattedPicks.length > 0) {
         const { error } = await supabase.from('phase_1_picks').insert(formattedPicks);
         if (error) throw error;
@@ -211,12 +223,12 @@ export default function Phase1Picks() {
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ group_picks_submitted: true, is_locked: true })
-        .eq('id', user.id);
+        .eq('id', targetUserIdToSave);
 
       if (profileError) throw profileError;
 
       // 3. Update UI states
-      setAllPicks(prev => ({ ...prev, [user.id]: picks }));
+      setAllPicks(prev => ({ ...prev, [targetUserIdToSave]: picks }));
       setIsLocked(true);
       setSaveStatus('success');
       
@@ -270,8 +282,23 @@ export default function Phase1Picks() {
            </div>
            
            {isViewingOther && (
-             <div className="mt-3 sm:mt-0 bg-amber-500/10 text-amber-400 border border-amber-500/30 px-4 py-1.5 rounded-full text-xs font-bold shadow-lg">
-               🔒 READ ONLY: {activeProfile?.display_name}'s Bracket
+             <div className={`mt-3 sm:mt-0 px-4 py-1.5 rounded-full text-xs font-bold shadow-lg ${adminEditMode ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'}`}>
+               {adminEditMode ? `🛠 Admin editing: ${activeProfile?.display_name}'s Bracket` : `🔒 READ ONLY: ${activeProfile?.display_name}'s Bracket`}
+             </div>
+           )}
+
+           {currentUserIsAdmin && (
+             <div className="mt-3 sm:mt-0 flex flex-col sm:flex-row items-center gap-3 text-sm text-slate-300">
+               <label className="inline-flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-full px-4 py-2 cursor-pointer">
+                 <input
+                   type="checkbox"
+                   checked={adminEditMode}
+                   onChange={(e) => setAdminEditMode(e.target.checked)}
+                   className="h-4 w-4 rounded border-slate-700 text-amber-500 focus:ring-amber-500"
+                 />
+                 <span className="font-semibold">Admin edit mode</span>
+               </label>
+               <span className="text-slate-400 text-xs">Enable editing of locked picks.</span>
              </div>
            )}
         </div>
@@ -298,7 +325,7 @@ export default function Phase1Picks() {
                     const record = liveStandings[team] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
                     
                     // Check if the dropdown should be disabled
-                    const inputIsDisabled = isViewingOther || (isLocked && !currentUserIsAdmin);
+                    const inputIsDisabled = (isViewingOther && !(currentUserIsAdmin && adminEditMode)) || (isLocked && !(currentUserIsAdmin && adminEditMode));
                     
                     return (
                       <div key={team} className="flex flex-col justify-center bg-slate-950 p-3 rounded-lg border border-slate-800/50">
@@ -362,12 +389,12 @@ export default function Phase1Picks() {
               </div>
               <button 
                 onClick={saveAndLockPicks}
-                disabled={isSaving || !user || (isLocked && !currentUserIsAdmin)}
+                disabled={isSaving || !user || (isLocked && !(currentUserIsAdmin && adminEditMode))}
                 className={`font-bold py-3 px-10 rounded-full shadow-lg transition-colors disabled:opacity-50 w-full sm:w-auto ${
-                  isLocked && !currentUserIsAdmin ? 'bg-slate-800 text-slate-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                  isLocked && !(currentUserIsAdmin && adminEditMode) ? 'bg-slate-800 text-slate-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 }`}
               >
-                {isLocked && !currentUserIsAdmin ? '🔒 Bracket Locked' : isSaving ? 'Locking in Database...' : 'Review & Submit Picks'}
+                {isLocked && !(currentUserIsAdmin && adminEditMode) ? '🔒 Bracket Locked' : isSaving ? 'Locking in Database...' : 'Review & Submit Picks'}
               </button>
             </div>
           </div>
