@@ -12,6 +12,9 @@ export default function Login() {
   
   const [unclaimedProfiles, setUnclaimedProfiles] = useState<any[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState('');
+  
+  // NEW: State to hold the display name for brand new users
+  const [newDisplayName, setNewDisplayName] = useState('');
 
   // Fetch unclaimed placeholders when switching to sign-up mode
   useEffect(() => {
@@ -34,15 +37,21 @@ export default function Login() {
     setLoading(true);
     setMessage(null);
 
-    if (isSignUp) {
-      // Pass the selected dropdown ID into the Supabase user metadata
+if (isSignUp) {
+      // Determine what metadata we are sending based on their choice
+      const metadata: any = {};
+      if (selectedProfileId) {
+        metadata.claim_profile_id = selectedProfileId;
+      } else {
+        // Automatically append the tag before it goes to the database
+        metadata.display_name = `${newDisplayName.trim()} (freeloader)`; 
+      }
+
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: {
-            claim_profile_id: selectedProfileId || null
-          }
+          data: metadata
         }
       });
 
@@ -53,6 +62,7 @@ export default function Login() {
         // Remove claimed profile from the list visually
         setUnclaimedProfiles(prev => prev.filter(p => p.id !== selectedProfileId));
         setSelectedProfileId('');
+        setNewDisplayName('');
         setIsSignUp(false); // Switch to login mode
       }
     } else {
@@ -116,7 +126,10 @@ export default function Login() {
               <label className="block text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">Claim Existing Bracket (Optional)</label>
               <select
                 value={selectedProfileId}
-                onChange={(e) => setSelectedProfileId(e.target.value)}
+                onChange={(e) => {
+                  setSelectedProfileId(e.target.value);
+                  if (e.target.value !== '') setNewDisplayName(''); // Clear new name if they decide to claim
+                }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
               >
                 <option value="">-- I am starting a new bracket --</option>
@@ -126,6 +139,21 @@ export default function Login() {
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {/* NEW: Conditional Display Name Input */}
+          {isSignUp && selectedProfileId === '' && (
+            <div className="animate-in fade-in slide-in-from-top-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Choose a Display Name</label>
+              <input
+                type="text"
+                value={newDisplayName}
+                onChange={(e) => setNewDisplayName(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                placeholder="e.g. WorldCupWizard"
+                required={isSignUp && selectedProfileId === ''} // Only required if they aren't claiming
+              />
             </div>
           )}
 
