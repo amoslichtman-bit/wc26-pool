@@ -48,15 +48,51 @@ export default function Phase1Picks() {
 
   useEffect(() => {
     const fetchAllData = async () => {
-      // 1. Fetch Profiles (now including the admin and lock status)
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id, display_name, email, is_admin, group_picks_submitted')
-        .order('display_name');
-      
-      if (profileData) setProfiles(profileData);
+      // 1. Fetch auth session first
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/');
+        return;
+      }
 
-      // 2. Fetch All Phase 1 Picks
+      const currentUser = session.user;
+      setUser(currentUser);
+      setViewingUserId(currentUser.id);
+
+      // 2. Fetch Profiles (now including the admin and lock status)
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, display_name, email, is_admin, group_picks_submitted, is_locked')
+        .order('display_name');
+
+      if (profileError) {
+        console.error('Profiles fetch error:', profileError);
+      } else if (profileData) {
+        setProfiles(profileData);
+      }
+
+      // 3. Find current user profile separately when needed
+      let userProfile = profileData?.find(p => p.id === currentUser.id);
+      if (!userProfile) {
+        const { data: currentUserProfile, error: currentUserProfileError } = await supabase
+          .from('profiles')
+          .select('id, is_admin, group_picks_submitted, is_locked')
+          .or(`auth_id.eq.${currentUser.id},email.eq.${currentUser.email}`)
+          .single();
+
+        if (currentUserProfileError) {
+          console.error('Current user profile lookup failed:', currentUserProfileError);
+        } else {
+          userProfile = currentUserProfile;
+        }
+      }
+
+      if (userProfile) {
+        setCurrentUserIsAdmin(userProfile.is_admin || false);
+        setIsLocked(userProfile.group_picks_submitted || userProfile.is_locked || false);
+      }
+
+      // 4. Fetch All Phase 1 Picks
       const { data: allPicksData } = await supabase.from('phase_1_picks').select('user_id, team_name, placement').limit(10000);
       if (allPicksData) {
         const picksMap: Record<string, Record<string, string>> = {};
@@ -65,28 +101,8 @@ export default function Phase1Picks() {
           picksMap[p.user_id][p.team_name] = p.placement;
         });
         setAllPicks(picksMap);
-      }
 
-      // 3. Fetch Auth Session and Apply Roles
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push('/');
-        return;
-      }
-      const currentUser = session?.user || null;
-      setUser(currentUser);
-      
-      if (currentUser) {
-        setViewingUserId(currentUser.id);
-        
-        // Find user's profile to check if they are admin or if they already locked their picks
-        const userProfile = profileData?.find(p => p.id === currentUser.id);
-        if (userProfile) {
-          setCurrentUserIsAdmin(userProfile.is_admin || false);
-          setIsLocked(userProfile.group_picks_submitted || false);
-        }
-
-        if (allPicksData) {
+        if (currentUser) {
           const userPicksArray = allPicksData.filter(p => p.user_id === currentUser.id);
           const loadedPicks: { [team: string]: string } = {};
           userPicksArray.forEach(pick => { loadedPicks[pick.team_name] = pick.placement; });
@@ -194,7 +210,7 @@ export default function Phase1Picks() {
       // 2. Lock Profile
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ group_picks_submitted: true })
+        .update({ group_picks_submitted: true, is_locked: true })
         .eq('id', user.id);
 
       if (profileError) throw profileError;
