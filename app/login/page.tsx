@@ -13,7 +13,7 @@ export default function Login() {
   const [unclaimedProfiles, setUnclaimedProfiles] = useState<any[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState('');
   
-  // NEW: State to hold the display name for brand new users
+  // State to hold the display name for brand new users
   const [newDisplayName, setNewDisplayName] = useState('');
 
   // Fetch unclaimed placeholders when switching to sign-up mode
@@ -37,14 +37,17 @@ export default function Login() {
     setLoading(true);
     setMessage(null);
 
-if (isSignUp) {
-      // Determine what metadata we are sending based on their choice
+    if (isSignUp) {
       const metadata: any = {};
+      
       if (selectedProfileId) {
+        // They are claiming an existing bracket
         metadata.claim_profile_id = selectedProfileId;
       } else {
-        // Automatically append the tag before it goes to the database
-        metadata.display_name = `${newDisplayName.trim()} (freeloader)`; 
+        // They are starting a new bracket. 
+        // We take what they typed and silently append the tag before sending to Supabase.
+        const cleanName = newDisplayName.trim() || 'Unnamed Player';
+        metadata.display_name = `${cleanName} (freeloader)`; 
       }
 
       const { error } = await supabase.auth.signUp({
@@ -59,7 +62,6 @@ if (isSignUp) {
         setMessage({ text: error.message, type: 'error' });
       } else {
         setMessage({ text: 'Account created! You can now log in.', type: 'success' });
-        // Remove claimed profile from the list visually
         setUnclaimedProfiles(prev => prev.filter(p => p.id !== selectedProfileId));
         setSelectedProfileId('');
         setNewDisplayName('');
@@ -96,14 +98,20 @@ if (isSignUp) {
         <div className="flex bg-slate-950 p-1 rounded-xl mb-6 border border-slate-800">
           <button
             type="button"
-            onClick={() => setIsSignUp(false)}
+            onClick={() => {
+              setIsSignUp(false);
+              setMessage(null);
+            }}
             className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${!isSignUp ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}
           >
             Log In
           </button>
           <button
             type="button"
-            onClick={() => setIsSignUp(true)}
+            onClick={() => {
+              setIsSignUp(true);
+              setMessage(null);
+            }}
             className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${isSignUp ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
           >
             Sign Up
@@ -121,6 +129,7 @@ if (isSignUp) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Claim Bracket Dropdown */}
           {isSignUp && unclaimedProfiles.length > 0 && (
             <div className="animate-in fade-in slide-in-from-top-2">
               <label className="block text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">Claim Existing Bracket (Optional)</label>
@@ -142,18 +151,20 @@ if (isSignUp) {
             </div>
           )}
 
-          {/* NEW: Conditional Display Name Input */}
-          {isSignUp && selectedProfileId === '' && (
+          {/* THE FIX: Conditional Display Name Input */}
+          {/* This renders IF they are signing up AND they haven't selected a bracket to claim */}
+          {isSignUp && !selectedProfileId && (
             <div className="animate-in fade-in slide-in-from-top-2">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Choose a Display Name</label>
+              <label className="block text-xs font-bold text-emerald-500 uppercase tracking-widest mb-2">Choose a Display Name</label>
               <input
                 type="text"
                 value={newDisplayName}
                 onChange={(e) => setNewDisplayName(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
                 placeholder="e.g. WorldCupWizard"
-                required={isSignUp && selectedProfileId === ''} // Only required if they aren't claiming
+                required={isSignUp && !selectedProfileId} 
               />
+              <p className="text-[10px] text-slate-500 mt-1">This name will appear on the leaderboard.</p>
             </div>
           )}
 
