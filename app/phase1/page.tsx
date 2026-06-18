@@ -395,12 +395,28 @@ export default function Phase1Picks() {
 
         {/* Floating 3Q Tracker */}
         <div className="flex justify-center mb-10">
-          <div className={`px-6 py-3 rounded-full border shadow-xl flex items-center space-x-3 transition-colors ${
+          <div className={`px-6 py-3 rounded-full border shadow-xl flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-6 transition-colors ${
             total3Q === 8 ? 'bg-emerald-900/50 border-emerald-500/50 text-emerald-400' : 'bg-slate-900 border-slate-700 text-slate-300'
           }`}>
-            <span className="font-bold tracking-widest uppercase text-xs">Advancing 3rd Place Teams (3Q)</span>
-            <div className={`text-lg font-black px-3 py-1 rounded-full ${total3Q === 8 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-white'}`}>
-              {total3Q} / 8
+            <div className="flex items-center space-x-3">
+              <span className="font-bold tracking-widest uppercase text-xs">Advancing 3rd Place Teams (3Q)</span>
+              <div className={`text-lg font-black px-3 py-1 rounded-full ${total3Q === 8 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-white'}`}>
+                {total3Q} / 8
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center gap-3 text-xs sm:text-sm text-slate-300">
+              <div className="inline-flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-inner"></span>
+                <span>Green = Exactly Correct</span>
+              </div>
+              <div className="inline-flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full bg-yellow-500 shadow-inner"></span>
+                <span>Yellow = Advancement Correct</span>
+              </div>
+              <div className="inline-flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full bg-red-500 shadow-inner"></span>
+                <span>Red = Incorrect</span>
+              </div>
             </div>
           </div>
         </div>
