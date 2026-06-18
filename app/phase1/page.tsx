@@ -303,10 +303,9 @@ export default function Phase1Picks() {
            )}
         </div>
 
-        {/* The 12 Tournament Groups */}
+{/* The 12 Tournament Groups */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-10">
           {TOURNAMENT_GROUPS.map(group => {
-            // -> Added dynamic sorting logic here
             const sortedTeams = [...group.teams].sort((a, b) => {
               const recordA = liveStandings[a] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
               const recordB = liveStandings[b] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
@@ -320,36 +319,57 @@ export default function Phase1Picks() {
             return (
               <div key={group.name} className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col h-full">
                 <h2 className="text-lg font-bold text-emerald-400 mb-4">{group.name}</h2>
-                <div className="space-y-3 flex-grow">
-                  {sortedTeams.map(team => {
+                <div className="space-y-4 flex-grow">
+                  {sortedTeams.map((team, index) => {
                     const record = liveStandings[team] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
                     
                     // Check if the dropdown should be disabled
                     const inputIsDisabled = (isViewingOther && !(currentUserIsAdmin && adminEditMode)) || (isLocked && !(currentUserIsAdmin && adminEditMode));
                     
+                    // Determine match status for coloring based on live standings
+                    const currentPick = displayPicks[team];
+                    let isMatch = null;
+                    if (currentPick) {
+                      if (currentPick === '1' && index === 0) isMatch = true;
+                      else if (currentPick === '2' && index === 1) isMatch = true;
+                      else if ((currentPick === '3Q' || currentPick === '3') && index === 2) isMatch = true;
+                      else if (currentPick === '4' && index === 3) isMatch = true;
+                      else isMatch = false;
+                    }
+
+                    // Assign dynamic colors based on match accuracy
+                    let selectColorClasses = 'border-slate-700 text-white'; // default
+                    if (isMatch === true) {
+                      selectColorClasses = 'border-emerald-500 text-emerald-400 font-bold bg-emerald-950/30';
+                    } else if (isMatch === false) {
+                      selectColorClasses = 'border-red-500 text-red-400 font-bold bg-red-950/30';
+                    }
+
                     return (
                       <div key={team} className="flex flex-col justify-center bg-slate-950 p-3 rounded-lg border border-slate-800/50">
                         <div className="flex justify-between items-center mb-2">
-                          <span className="font-semibold text-slate-200 text-sm truncate pr-2">{team}</span>
+                          {/* Increased font size to text-base/text-lg for better readability */}
+                          <span className="font-bold text-slate-100 text-base md:text-lg truncate pr-2">{team}</span>
+                          
+                          {/* Enlarged select input with dynamic color classes */}
                           <select 
                             disabled={inputIsDisabled}
-                            className={`bg-slate-800 text-white border rounded p-1.5 text-xs focus:ring-emerald-500 focus:border-emerald-500 outline-none w-28 disabled:opacity-70 disabled:cursor-not-allowed ${
-                              displayPicks[team] ? 'border-emerald-500/50 text-emerald-300 font-bold' : 'border-slate-700'
-                            }`}
-                            value={displayPicks[team] || ''}
+                            className={`bg-slate-800 border-2 rounded-lg p-2 text-sm focus:ring-emerald-500 focus:border-emerald-500 outline-none w-32 disabled:opacity-70 disabled:cursor-not-allowed transition-colors ${selectColorClasses}`}
+                            value={currentPick || ''}
                             onChange={(e) => handleSelect(team, e.target.value)}
                           >
                             <option value="" disabled>Rank</option>
                             <option value="1">1st</option>
                             <option value="2">2nd</option>
-                            <option value="3Q">3rd (Adv)</option>
-                            <option value="3">3rd (Out)</option>
-                            <option value="4">4th</option>
+                            <option value="3Q">3Qual</option>
+                            <option value="3">3Elim</option>
+                            <option value="4">4</option>
                           </select>
                         </div>
-                        <div className="flex justify-between items-center text-xs text-slate-500">
+                        {/* Increased record text size from xs to sm */}
+                        <div className="flex justify-between items-center text-sm text-slate-400">
                           <span>W-D-L: {record.w}-{record.d}-{record.l}</span>
-                          <span className="font-bold text-slate-400">{record.pts} pts</span>
+                          <span className="font-bold text-slate-300">{record.pts} pts</span>
                         </div>
                       </div>
                     );

@@ -370,9 +370,7 @@ export default function Home() {
   return (
     <main className="min-h-screen p-4 sm:p-8 bg-slate-950 text-slate-200 font-sans">
       <div className="max-w-[1600px] mx-auto">
-        <header className="mb-8 flex flex-col items-center">
-          <h1 className="text-4xl font-black tracking-tight text-white mb-3 text-center">World Cup 2026 Knockout Bracket</h1>
-          
+        <header className="mb-8 flex flex-col items-center">          
           <div className="flex flex-col items-center mb-6 space-y-3">
             {isGlobalKnockoutTimeLocked ? (
               <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-6 py-2 rounded-lg text-sm font-bold flex items-center space-x-2 shadow-lg">
@@ -385,14 +383,14 @@ export default function Home() {
               </div>
             ) : (
               <div className="bg-slate-800 border border-slate-700 text-slate-400 px-6 py-2 rounded-lg text-sm font-bold flex items-center space-x-2 shadow-lg text-center">
-                 <span>⏳ Bracket Pending: The final bracket will unlock for official picks on June 28, 2026, at 12:10 AM ET.</span>
+                 <span>⏳ This is a Preliminary Bracket Based on Curent Standings.</span>
               </div>
             )}
             
             <div className={`border px-4 py-2 rounded-lg text-xs font-semibold flex items-center space-x-2 max-w-2xl text-center shadow-lg ${
               isGlobalKnockoutTimeLocked ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
             }`}>
-              <span>⚠️ The official review window opens June 28 at 12:10 AM ET. All picks must be finalized and locked in before the 3:00 PM ET deadline.</span>
+              <span>⚠️ Finalized Bracket Open for Picks from June 28 at 12:10 AM ET to 3:00 PM ET deadline.</span>
             </div>
           </div>
 
