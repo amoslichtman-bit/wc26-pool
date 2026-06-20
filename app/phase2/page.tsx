@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
 
+// GLOBAL DEADLINES
+const GROUP_STAGE_END_TIME = new Date('2026-06-28T00:10:00-04:00').getTime();
+const KNOCKOUT_START_TIME = new Date('2026-06-28T15:00:00-04:00').getTime();
+
 const INITIAL_MATCHES = [
   { id: 1, round: 'R32', nextMatchId: 17, slot: 'home', teamA: '1st Place Group A', teamB: '3Q Groups C/D/E', winner: null },
   { id: 2, round: 'R32', nextMatchId: 17, slot: 'away', teamA: '2nd Place Group B', teamB: '2nd Place Group C', winner: null },
@@ -54,13 +58,33 @@ export default function Home() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
+  // Time States
+  const [isBracketFinalized, setIsBracketFinalized] = useState(false);
+  const [isGlobalKnockoutTimeLocked, setIsGlobalKnockoutTimeLocked] = useState(false);
+  
   // Security States
   const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
   const [adminEditMode, setAdminEditMode] = useState(false);
 
+  // Global View Logic
   const targetUserId = viewingUserId || user?.id;
   const isViewingOther = targetUserId && targetUserId !== user?.id;
   const inputIsDisabled = isViewingOther && !(currentUserIsAdmin && adminEditMode);
+
+  // Real-time Deadline Enforcer for UI labels
+  useEffect(() => {
+    const checkTime = () => {
+      const now = Date.now();
+      setIsBracketFinalized(now >= GROUP_STAGE_END_TIME);
+      setIsGlobalKnockoutTimeLocked(now >= KNOCKOUT_START_TIME);
+    };
+    
+    checkTime(); 
+    const timer = setInterval(checkTime, 10000); 
+    
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     const initializeApp = async () => {
       const { data: profileData } = await supabase.from('profiles').select('id, display_name, email, knockout_picks_submitted').order('display_name');
@@ -101,7 +125,6 @@ export default function Home() {
           thirds.sort((a,b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf));
           const top8Thirds = thirds.slice(0, 8);
 
-          // Sub in the projections into your string placeholders
           dynamicMatches = dynamicMatches.map((m: any) => {
             let newA = m.teamA;
             let newB = m.teamB;
@@ -143,7 +166,6 @@ export default function Home() {
                 const apiMatch = r32Matches[m.id - 1];
                 const rawTeamA = apiMatch.homeTeam?.name;
                 const rawTeamB = apiMatch.awayTeam?.name;
-                // Only overwrite if the API actually sent us a team name
                 if (rawTeamA) m.teamA = API_MAP[rawTeamA] || rawTeamA;
                 if (rawTeamB) m.teamB = API_MAP[rawTeamB] || rawTeamB;
               }
@@ -157,7 +179,6 @@ export default function Home() {
 
       setBaseBracket(dynamicMatches);
 
-      // Restore User Session Data
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.push('/');
@@ -287,12 +308,12 @@ export default function Home() {
 
   const formatTeamName = (name: string) => {
     if (!name) return 'TBD';
-    if (name.includes('Place') || name.includes('3Q')) return name;
-    return `${name}`; // Removed the (Prelim) suffix to match the new behavior
+    return name;
   };
 
   const renderRound = (roundName: string, title: string) => {
     const roundMatches = matches.filter(m => m.round === roundName);
+
     return (
       <div className="flex flex-col space-y-4 min-w-[250px]">
         <h3 className="text-center font-bold text-slate-500 uppercase tracking-widest text-xs mb-2 sticky top-0 bg-slate-950 py-2 z-10">
@@ -338,10 +359,27 @@ export default function Home() {
   return (
     <main className="min-h-screen p-4 sm:p-8 bg-slate-950 text-slate-200 font-sans">
       <div className="max-w-[1600px] mx-auto">
+        
         <header className="mb-8 flex flex-col items-center">          
           <div className="flex flex-col items-center mb-6 space-y-3">
-            <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-6 py-4 rounded-lg text-sm font-bold flex items-center space-x-2 shadow-lg text-center max-w-2xl">
-              <span>⚠️ This bracket is a companion to Ted's Google Sheets, and does not replace any of your responsibilities in making your picks in the Google Sheet. Picks will remain open here, but your official picks must be locked in the spreadsheet before the knockout stage begins.</span>
+            <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-6 py-4 rounded-lg text-sm flex flex-col items-center shadow-lg text-center max-w-3xl gap-3">
+              <span className="font-bold">
+                ⚠️ This bracket is a companion to Ted's Google Sheets and does not replace any of you Google Sheets duties. Picks remain open here, but your official picks must be locked in the spreadsheet before the knockout stage begins.
+              </span>
+              
+              {!isBracketFinalized ? (
+                <span className="text-xs font-medium text-amber-200/80">
+                  Teams currently shown are preliminary projections. The bracket will refresh with the actual knockout round teams when the group stage ends.
+                </span>
+              ) : (
+                <span className="text-xs font-bold text-emerald-400">
+                  Group stage complete. The bracket is now populated with official matchups.
+                </span>
+              )}
+              
+              <span className="text-xs font-bold mt-1 bg-amber-500/20 px-3 py-1.5 rounded-md border border-amber-500/30">
+                Official Finalized Bracket Window: June 28 at 12:10 AM ET — June 28 at 3:00 PM ET
+              </span>
             </div>
           </div>
 
@@ -378,7 +416,9 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="bg-slate-900 border border-slate-800 px-6 py-3 rounded-full flex flex-col sm:flex-row items-center gap-3 shadow-lg">
-                  {isSaving ? (
+                  {isGlobalKnockoutTimeLocked ? (
+                    <span className="text-amber-500 font-bold text-sm">🗓️ Official Lock Time Passed (Picks remain editable here)</span>
+                  ) : isSaving ? (
                     <span className="text-slate-400 font-bold text-sm animate-pulse">🔄 Saving changes...</span>
                   ) : saveStatus === 'success' ? (
                     <span className="text-emerald-400 font-bold text-sm">✓ All changes saved automatically</span>
@@ -401,10 +441,28 @@ export default function Home() {
                 />
                 <span className="font-semibold">Admin edit mode</span>
               </label>
-              <span className="text-slate-400 text-xs">Enable editing while the bracket is locked.</span>
+              <span className="text-slate-400 text-xs">Enable editing of other players' brackets.</span>
             </div>
           )}
         </header>
+
+        {/* --- STATUS LABEL --- */}
+        <div className="flex justify-center mb-4">
+          {!isBracketFinalized ? (
+            <div className="px-5 py-2 rounded-full bg-slate-900 border border-slate-700 text-slate-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2 shadow-lg">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+              Preliminary Projections
+            </div>
+          ) : (
+            <div className="px-5 py-2 rounded-full bg-emerald-950/50 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2 shadow-lg">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
+              Official Finalized Bracket
+            </div>
+          )}
+        </div>
 
         <div className="flex space-x-6 sm:space-x-8 overflow-x-auto pb-12 pt-4 px-2 sm:px-4 items-start min-h-[75vh] hide-scrollbar border-t border-slate-800/50">
           {renderRound('R32', 'Round of 32')}
