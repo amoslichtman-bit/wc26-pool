@@ -29,7 +29,7 @@ export default function Phase1Picks() {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [allPicks, setAllPicks] = useState<Record<string, Record<string, string>>>({});
   const [picks, setPicks] = useState<{ [team: string]: string }>({});
-  const [liveStandings, setLiveStandings] = useState<{ [team: string]: { w: number, d: number, l: number, pts: number, gd: number } }>({});
+  const [liveStandings, setLiveStandings] = useState<{ [team: string]: { w: number, d: number, l: number, pts: number, gd: number, gf: number } }>({});
   
   // View & Security States
   const [viewingUserId, setViewingUserId] = useState<string>('');
@@ -136,7 +136,8 @@ export default function Phase1Picks() {
                     d: teamRow.draw, 
                     l: teamRow.lost, 
                     pts: teamRow.points, 
-                    gd: teamRow.goalDifference || 0 
+                    gd: teamRow.goalDifference || 0,
+                    gf: teamRow.goalsFor || 0
                 };
               });
             });
@@ -239,11 +240,12 @@ export default function Phase1Picks() {
   // --- GLOBAL 3RD PLACE & GROUP SORTING LOGIC ---
   const groupsWithStandings = TOURNAMENT_GROUPS.map(group => {
     const sortedTeams = [...group.teams].sort((a, b) => {
-      const recordA = liveStandings[a] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
-      const recordB = liveStandings[b] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
+      const recordA = liveStandings[a] || { w: 0, d: 0, l: 0, pts: 0, gd: 0, gf: 0 };
+      const recordB = liveStandings[b] || { w: 0, d: 0, l: 0, pts: 0, gd: 0, gf: 0 };
       
       if (recordB.pts !== recordA.pts) return recordB.pts - recordA.pts; 
       if (recordB.gd !== recordA.gd) return recordB.gd - recordA.gd;     
+      if (recordB.gf !== recordA.gf) return recordB.gf - recordA.gf; 
       if (recordB.w !== recordA.w) return recordB.w - recordA.w;         
       return 0;                                                          
     });
@@ -252,10 +254,11 @@ export default function Phase1Picks() {
 
   const allThirdPlaceTeams = groupsWithStandings.map(g => g.sortedTeams[2]).filter(Boolean);
   allThirdPlaceTeams.sort((a, b) => {
-    const recA = liveStandings[a] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
-    const recB = liveStandings[b] || { w: 0, d: 0, l: 0, pts: 0, gd: 0 };
+    const recA = liveStandings[a] || { w: 0, d: 0, l: 0, pts: 0, gd: 0, gf: 0 };
+    const recB = liveStandings[b] || { w: 0, d: 0, l: 0, pts: 0, gd: 0, gf: 0 };
     if (recB.pts !== recA.pts) return recB.pts - recA.pts;
     if (recB.gd !== recA.gd) return recB.gd - recA.gd;
+    if (recB.gf !== recA.gf) return recB.gf - recA.gf; 
     if (recB.w !== recA.w) return recB.w - recA.w;
     return 0;
   });

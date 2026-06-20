@@ -4,10 +4,6 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
 
-// GLOBAL DEADLINES
-const GROUP_STAGE_END_TIME = new Date('2026-06-28T00:10:00-04:00').getTime();
-const KNOCKOUT_START_TIME = new Date('2026-06-28T15:00:00-04:00').getTime();
-
 const INITIAL_MATCHES = [
   { id: 1, round: 'R32', nextMatchId: 17, slot: 'home', teamA: '1st Place Group A', teamB: '3Q Groups C/D/E', winner: null },
   { id: 2, round: 'R32', nextMatchId: 17, slot: 'away', teamA: '2nd Place Group B', teamB: '2nd Place Group C', winner: null },
@@ -58,32 +54,13 @@ export default function Home() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
-  // Time and Lock States
-  const [isBracketFinalized, setIsBracketFinalized] = useState(false);
-  const [isGlobalKnockoutTimeLocked, setIsGlobalKnockoutTimeLocked] = useState(false);
-  
   // Security States
   const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
-  const [isUserLocked, setIsUserLocked] = useState(false);
   const [adminEditMode, setAdminEditMode] = useState(false);
 
   const targetUserId = viewingUserId || user?.id;
   const isViewingOther = targetUserId && targetUserId !== user?.id;
-
-  // Real-time Deadline Enforcer
-  useEffect(() => {
-    const checkTime = () => {
-      const now = Date.now();
-      setIsBracketFinalized(now >= GROUP_STAGE_END_TIME);
-      setIsGlobalKnockoutTimeLocked(now >= KNOCKOUT_START_TIME);
-    };
-    
-    checkTime(); 
-    const timer = setInterval(checkTime, 10000); 
-    
-    return () => clearInterval(timer);
-  }, []);
-
+  const inputIsDisabled = isViewingOther && !(currentUserIsAdmin && adminEditMode);
   useEffect(() => {
     const initializeApp = async () => {
       const { data: profileData } = await supabase.from('profiles').select('id, display_name, email, knockout_picks_submitted').order('display_name');
@@ -94,51 +71,93 @@ export default function Home() {
 
       let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_MATCHES));
       
+      const API_MAP: Record<string, string> = { 
+        "United States": "United States", "USA": "United States", 
+        "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina", 
+        "Czech Republic": "Czechia", "Korea Republic": "South Korea", 
+        "Congo DR": "DR Congo", "Côte d'Ivoire": "Ivory Coast", 
+        "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde" 
+      };
+
       try {
-        // Fetch from the new specific knockout matches endpoint
+        // STEP 1: Predict Knockout Teams based on current live standings
+        const standingsRes = await fetch('/api/standings');
+        if (standingsRes.ok) {
+          const sData = await standingsRes.json();
+          const groupRanks: Record<string, string[]> = {};
+          const thirds: any[] = [];
+          
+          const groupStandings = sData.standings?.filter((s: any) => s.type === 'TOTAL') || [];
+          groupStandings.forEach((group: any) => {
+            const groupLetter = group.group.replace('GROUP_', '');
+            const sorted = group.table.sort((a: any, b: any) => (b.points - a.points) || (b.goalDifference - a.goalDifference) || (b.goalsFor - a.goalsFor));
+            
+            groupRanks[groupLetter] = sorted.map((t: any) => API_MAP[t.team.name] || t.team.name);
+            if(sorted[2]) {
+              thirds.push({ team: groupRanks[groupLetter][2], group: groupLetter, pts: sorted[2].points, gd: sorted[2].goalDifference, gf: sorted[2].goalsFor });
+            }
+          });
+
+          thirds.sort((a,b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf));
+          const top8Thirds = thirds.slice(0, 8);
+
+          // Sub in the projections into your string placeholders
+          dynamicMatches = dynamicMatches.map((m: any) => {
+            let newA = m.teamA;
+            let newB = m.teamB;
+            
+            const match1stA = newA.match(/1st Place Group ([A-L])/);
+            if(match1stA && groupRanks[match1stA[1]]) newA = groupRanks[match1stA[1]][0] || newA;
+            
+            const match2ndA = newA.match(/2nd Place Group ([A-L])/);
+            if(match2ndA && groupRanks[match2ndA[1]]) newA = groupRanks[match2ndA[1]][1] || newA;
+
+            const match1stB = newB.match(/1st Place Group ([A-L])/);
+            if(match1stB && groupRanks[match1stB[1]]) newB = groupRanks[match1stB[1]][0] || newB;
+            
+            const match2ndB = newB.match(/2nd Place Group ([A-L])/);
+            if(match2ndB && groupRanks[match2ndB[1]]) newB = groupRanks[match2ndB[1]][1] || newB;
+
+            if (newA.includes('3Q Groups')) {
+              const groups = newA.replace('3Q Groups ', '').split('/');
+              const availableThird = top8Thirds.find((t: any) => groups.includes(t.group));
+              if (availableThird) newA = availableThird.team;
+            }
+            if (newB.includes('3Q Groups')) {
+              const groups = newB.replace('3Q Groups ', '').split('/');
+              const availableThird = top8Thirds.find((t: any) => groups.includes(t.group));
+              if (availableThird) newB = availableThird.team;
+            }
+            return { ...m, teamA: newA, teamB: newB };
+          });
+        }
+
+        // STEP 2: Overwrite projections with actual official match data if the API provides it
         const apiRes = await fetch('/api/matches');
-        
         if (apiRes.ok) {
           const data = await apiRes.json();
-          
           if (data.matches && data.matches.length > 0) {
-            // Filter only for the Round of 32
             const r32Matches = data.matches.filter((m: any) => m.stage === 'LAST_32');
-            
-            const API_MAP: Record<string, string> = { 
-              "United States": "United States", "USA": "United States", 
-              "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina", 
-              "Czech Republic": "Czechia", "Korea Republic": "South Korea", 
-              "Congo DR": "DR Congo", "Côte d'Ivoire": "Ivory Coast", 
-              "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde" 
-            };
-
             dynamicMatches = dynamicMatches.map((m: any) => {
-              if (m.round === 'R32') {
-                // The API matches are mapped chronologically to your IDs 1-16
+              if (m.round === 'R32' && r32Matches[m.id - 1]) {
                 const apiMatch = r32Matches[m.id - 1];
-                
-                if (apiMatch) {
-                  // If the team name is populated by the API, use it. Otherwise, keep the placeholder.
-                  const rawTeamA = apiMatch.homeTeam?.name;
-                  const rawTeamB = apiMatch.awayTeam?.name;
-                  
-                  const teamA_name = rawTeamA ? (API_MAP[rawTeamA] || rawTeamA) : m.teamA;
-                  const teamB_name = rawTeamB ? (API_MAP[rawTeamB] || rawTeamB) : m.teamB;
-
-                  return { ...m, teamA: teamA_name, teamB: teamB_name };
-                }
+                const rawTeamA = apiMatch.homeTeam?.name;
+                const rawTeamB = apiMatch.awayTeam?.name;
+                // Only overwrite if the API actually sent us a team name
+                if (rawTeamA) m.teamA = API_MAP[rawTeamA] || rawTeamA;
+                if (rawTeamB) m.teamB = API_MAP[rawTeamB] || rawTeamB;
               }
               return m;
             });
           }
         }
       } catch(e) { 
-        console.warn("Matches API load failed", e); 
+        console.warn("API load failed", e); 
       }
 
       setBaseBracket(dynamicMatches);
 
+      // Restore User Session Data
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.push('/');
@@ -148,16 +167,8 @@ export default function Home() {
       if (session?.user) {
         setUser(session.user);
         setViewingUserId(session.user.id);
-
-        const userProfile = profileData?.find(p => p.id === session.user.id);
-        if (userProfile) {
-          setIsUserLocked(userProfile.knockout_picks_submitted || false);
-        }
-
         const { data: roleData } = await supabase.from('user_roles').select('role').eq('user_id', session.user.id).single();
-        if (roleData?.role === 'admin') {
-          setCurrentUserIsAdmin(true);
-        }
+        if (roleData?.role === 'admin') setCurrentUserIsAdmin(true);
       }
     };
 
@@ -211,7 +222,6 @@ export default function Home() {
   }, [viewingUserId, targetUserId, allPhase2Picks, baseBracket]);
 
   const handlePick = (matchId: number, selectedTeam: string) => {
-    const inputIsDisabled = (isViewingOther && !(currentUserIsAdmin && adminEditMode)) || ( (isGlobalKnockoutTimeLocked || isUserLocked) && !(currentUserIsAdmin && adminEditMode) );
     if (!selectedTeam || inputIsDisabled) return;
     
     const currentMatch = matches.find(m => m.id === matchId);
@@ -234,7 +244,6 @@ export default function Home() {
   // Debounced Auto-Save
   useEffect(() => {
     if (!hasUnsavedChanges || (!currentUserIsAdmin && isViewingOther) || !user) return;
-    if (Date.now() >= KNOCKOUT_START_TIME && !(currentUserIsAdmin && adminEditMode)) return;
 
     const timer = setTimeout(() => {
       performSilentSave();
@@ -278,14 +287,12 @@ export default function Home() {
 
   const formatTeamName = (name: string) => {
     if (!name) return 'TBD';
-    if (name.includes('Place') || name.includes('3Q') || isBracketFinalized) return name;
-    return `${name} (Prelim)`;
+    if (name.includes('Place') || name.includes('3Q')) return name;
+    return `${name}`; // Removed the (Prelim) suffix to match the new behavior
   };
 
   const renderRound = (roundName: string, title: string) => {
     const roundMatches = matches.filter(m => m.round === roundName);
-    const inputIsDisabled = (isViewingOther && !(currentUserIsAdmin && adminEditMode)) || ( (isGlobalKnockoutTimeLocked || isUserLocked) && !(currentUserIsAdmin && adminEditMode) );
-
     return (
       <div className="flex flex-col space-y-4 min-w-[250px]">
         <h3 className="text-center font-bold text-slate-500 uppercase tracking-widest text-xs mb-2 sticky top-0 bg-slate-950 py-2 z-10">
@@ -333,25 +340,8 @@ export default function Home() {
       <div className="max-w-[1600px] mx-auto">
         <header className="mb-8 flex flex-col items-center">          
           <div className="flex flex-col items-center mb-6 space-y-3">
-            {isGlobalKnockoutTimeLocked ? (
-              <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-6 py-2 rounded-lg text-sm font-bold flex items-center space-x-2 shadow-lg">
-                 <span>🔒 Global Knockout Lock In Effect</span>
-              </div>
-            ) : isBracketFinalized ? (
-              <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-6 py-2 rounded-lg text-sm font-bold flex items-center space-x-2 shadow-lg">
-                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                 <span>Knockout Bracket Finalized and Open for Picks</span>
-              </div>
-            ) : (
-              <div className="bg-slate-800 border border-slate-700 text-slate-400 px-6 py-2 rounded-lg text-sm font-bold flex items-center space-x-2 shadow-lg text-center">
-                 <span>⏳ Bracket Waiting on API Results.</span>
-              </div>
-            )}
-            
-            <div className={`border px-4 py-2 rounded-lg text-xs font-semibold flex items-center space-x-2 max-w-2xl text-center shadow-lg ${
-              isGlobalKnockoutTimeLocked ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-            }`}>
-              <span>⚠️ Finalized Bracket Open for Picks from June 28 at 12:10 AM ET to 3:00 PM ET deadline.</span>
+            <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-6 py-4 rounded-lg text-sm font-bold flex items-center space-x-2 shadow-lg text-center max-w-2xl">
+              <span>⚠️ This bracket is a companion to Ted's Google Sheets, and does not replace any of your responsibilities in making your picks in the Google Sheet. Picks will remain open here, but your official picks must be locked in the spreadsheet before the knockout stage begins.</span>
             </div>
           </div>
 
@@ -388,9 +378,7 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="bg-slate-900 border border-slate-800 px-6 py-3 rounded-full flex flex-col sm:flex-row items-center gap-3 shadow-lg">
-                  {(isGlobalKnockoutTimeLocked || isUserLocked) && !(currentUserIsAdmin && adminEditMode) ? (
-                    <span className="text-amber-500 font-bold text-sm">🔒 Bracket is Locked</span>
-                  ) : isSaving ? (
+                  {isSaving ? (
                     <span className="text-slate-400 font-bold text-sm animate-pulse">🔄 Saving changes...</span>
                   ) : saveStatus === 'success' ? (
                     <span className="text-emerald-400 font-bold text-sm">✓ All changes saved automatically</span>
@@ -443,7 +431,7 @@ export default function Home() {
                    setTiebreakerScore(e.target.value);
                    setHasUnsavedChanges(true);
                  }}
-                 disabled={(isViewingOther && !(currentUserIsAdmin && adminEditMode)) || ( (isGlobalKnockoutTimeLocked || isUserLocked) && !(currentUserIsAdmin && adminEditMode) )}
+                 disabled={inputIsDisabled}
                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-center text-white focus:border-amber-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                />
                <p className="text-[10px] text-slate-500 mt-2">Predict the exact score at the end of regulation/extra time.</p>
