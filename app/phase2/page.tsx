@@ -102,14 +102,17 @@ export default function Home() {
         "Congo DR": "DR Congo", "Côte d'Ivoire": "Ivory Coast", 
         "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde" 
       };
-
       try {
         // STEP 1: Predict Knockout Teams based on current live standings
-        const standingsRes = await fetch('/api/standings');
+        // Add { cache: 'no-store' } to bypass aggressive caching
+        const standingsRes = await fetch('/api/standings', { cache: 'no-store' });
         if (standingsRes.ok) {
           const sData = await standingsRes.json();
           const groupRanks: Record<string, string[]> = {};
           const thirds: any[] = [];
+          
+          // ... (existing groupStandings logic remains unchanged) ...
+        
           
           const groupStandings = sData.standings?.filter((s: any) => s.type === 'TOTAL') || [];
           groupStandings.forEach((group: any) => {
@@ -156,7 +159,8 @@ export default function Home() {
         }
 
         // STEP 2: Overwrite projections with actual official match data if the API provides it
-        const apiRes = await fetch('/api/matches');
+// Add { cache: 'no-store' } to bypass aggressive caching
+        const apiRes = await fetch('/api/matches', { cache: 'no-store' });
         if (apiRes.ok) {
           const data = await apiRes.json();
           if (data.matches && data.matches.length > 0) {

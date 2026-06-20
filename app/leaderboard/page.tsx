@@ -17,43 +17,74 @@ export default function Leaderboard() {
     const now = new Date().getTime();
     setIsGroupStageFinalized(now >= groupStageEndTime);
 
-    const buildLeaderboard = async () => {
+const buildLeaderboard = async () => {
       try {
-        let currentStandings: Record<string, { rank: number, pts: number, gd: number }> = {};
+        let currentStandings: Record<string, { rank: number, pts: number, gd: number, gf: number }> = {};
         let advancingThirdPlace: string[] = [];
         
         let actualKnockoutResults: Record<string, string[]> = {
           'R32': [], 'R16': [], 'QF': [], 'SF': [], 'CHAMPION': []
         };
 
-        const apiRes = await fetch('/api/standings');
+        const API_TO_SHEET_MAP: Record<string, string> = {
+          "United States": "United States", "USA": "United States",
+          "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina",
+          "Czech Republic": "Czechia", "Korea Republic": "South Korea", "Congo DR": "DR Congo",
+          "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde"
+        };
+
+        // 1. Fetch Group Stage Standings (with no-store to beat aggressive cache)
+        const apiRes = await fetch('/api/standings', { cache: 'no-store' });
         if (apiRes.ok) {
           const liveData = await apiRes.json();
-          const thirdPlaceTeams: { team: string, pts: number, gd: number }[] = [];
+          const thirdPlaceTeams: { team: string, pts: number, gd: number, gf: number }[] = [];
 
           if (liveData.standings) {
             const groups = liveData.standings.filter((s: any) => s.type === 'TOTAL');
             groups.forEach((group: any) => {
               group.table.forEach((row: any, index: number) => {
                 const apiName = row.team.name;
-                const API_TO_SHEET_MAP: Record<string, string> = {
-                  "United States": "United States", "USA": "United States",
-                  "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina",
-                  "Czech Republic": "Czechia", "Korea Republic": "South Korea", "Congo DR": "DR Congo",
-                  "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde"
-                };
                 const teamName = API_TO_SHEET_MAP[apiName] || apiName;
                 
                 const rank = index + 1;
-                currentStandings[teamName] = { rank, pts: row.points, gd: row.goalDifference };
-                if (rank === 3) thirdPlaceTeams.push({ team: teamName, pts: row.points, gd: row.goalDifference });
+                currentStandings[teamName] = { rank, pts: row.points, gd: row.goalDifference, gf: row.goalsFor || 0 };
+                // Added gf to tiebreaker math
+                if (rank === 3) thirdPlaceTeams.push({ team: teamName, pts: row.points, gd: row.goalDifference, gf: row.goalsFor || 0 });
               });
             });
           }
-          thirdPlaceTeams.sort((a, b) => b.pts - a.pts || b.gd - a.gd);
+          // Sort explicitly matches Phase 1 logic now
+          thirdPlaceTeams.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
           advancingThirdPlace = thirdPlaceTeams.slice(0, 8).map(t => t.team);
         }
 
+        // 2. Fetch Knockout Matches to properly populate actualKnockoutResults
+        const matchesRes = await fetch('/api/matches', { cache: 'no-store' });
+        if (matchesRes.ok) {
+          const mData = await matchesRes.json();
+          if (mData.matches) {
+            mData.matches.forEach((match: any) => {
+              if (match.status === 'FINISHED') {
+                let winner = null;
+                // Football-data.org natively handles penalty shootouts in score.winner
+                if (match.score?.winner === 'HOME_TEAM') winner = match.homeTeam?.name;
+                else if (match.score?.winner === 'AWAY_TEAM') winner = match.awayTeam?.name;
+                
+                if (winner) {
+                  winner = API_TO_SHEET_MAP[winner] || winner;
+                  
+                  if (match.stage === 'LAST_32') actualKnockoutResults['R32'].push(winner);
+                  else if (match.stage === 'LAST_16') actualKnockoutResults['R16'].push(winner);
+                  else if (match.stage === 'QUARTER_FINALS') actualKnockoutResults['QF'].push(winner);
+                  else if (match.stage === 'SEMI_FINALS') actualKnockoutResults['SF'].push(winner);
+                  else if (match.stage === 'FINAL') actualKnockoutResults['CHAMPION'].push(winner);
+                }
+              }
+            });
+          }
+        }
+
+        // 3. Score Users
         const { data: profiles } = await supabase.from('profiles').select('id, display_name');
         const { data: p1Picks } = await supabase.from('phase_1_picks').select('user_id, team_name, placement').limit(10000);
         const { data: p2Picks } = await supabase.from('phase_2_picks').select('user_id, team_name, predicted_round').limit(10000);

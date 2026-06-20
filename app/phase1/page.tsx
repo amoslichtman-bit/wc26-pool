@@ -113,9 +113,10 @@ export default function Phase1Picks() {
       }
     };
 
-    const fetchLiveStandings = async () => {
+ const fetchLiveStandings = async () => {
         try {
-          const res = await fetch('/api/standings');
+          // Add { cache: 'no-store' } to bypass aggressive caching
+          const res = await fetch('/api/standings', { cache: 'no-store' });
           if (res.ok) {
             const data = await res.json();
             const groupStandings = data.standings.filter((s: any) => s.type === 'TOTAL');
