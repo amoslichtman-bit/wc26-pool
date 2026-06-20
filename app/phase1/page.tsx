@@ -29,6 +29,7 @@ export default function Phase1Picks() {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [allPicks, setAllPicks] = useState<Record<string, Record<string, string>>>({});
   const [picks, setPicks] = useState<{ [team: string]: string }>({});
+  // Added gf (Goals For) to state type
   const [liveStandings, setLiveStandings] = useState<{ [team: string]: { w: number, d: number, l: number, pts: number, gd: number, gf: number } }>({});
   
   // View & Security States
@@ -113,9 +114,8 @@ export default function Phase1Picks() {
       }
     };
 
- const fetchLiveStandings = async () => {
+    const fetchLiveStandings = async () => {
         try {
-          // Add { cache: 'no-store' } to bypass aggressive caching
           const res = await fetch('/api/standings', { cache: 'no-store' });
           if (res.ok) {
             const data = await res.json();
@@ -245,8 +245,8 @@ export default function Phase1Picks() {
       const recordB = liveStandings[b] || { w: 0, d: 0, l: 0, pts: 0, gd: 0, gf: 0 };
       
       if (recordB.pts !== recordA.pts) return recordB.pts - recordA.pts; 
-      if (recordB.gd !== recordA.gd) return recordB.gd - recordA.gd;     
-      if (recordB.gf !== recordA.gf) return recordB.gf - recordA.gf; 
+      if (recordB.gd !== recordA.gd) return recordB.gd - recordA.gd; 
+      if (recordB.gf !== recordA.gf) return recordB.gf - recordA.gf;
       if (recordB.w !== recordA.w) return recordB.w - recordA.w;         
       return 0;                                                          
     });
@@ -259,7 +259,7 @@ export default function Phase1Picks() {
     const recB = liveStandings[b] || { w: 0, d: 0, l: 0, pts: 0, gd: 0, gf: 0 };
     if (recB.pts !== recA.pts) return recB.pts - recA.pts;
     if (recB.gd !== recA.gd) return recB.gd - recA.gd;
-    if (recB.gf !== recA.gf) return recB.gf - recA.gf; 
+    if (recB.gf !== recA.gf) return recB.gf - recA.gf;
     if (recB.w !== recA.w) return recB.w - recA.w;
     return 0;
   });
@@ -395,6 +395,50 @@ export default function Phase1Picks() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Live 3rd Place Standings Table */}
+        <div className="max-w-4xl mx-auto mb-10 bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden">
+          <div className="bg-slate-950 p-4 border-b border-slate-800">
+            <h2 className="text-lg font-bold text-amber-500 uppercase tracking-widest text-center">Live 3rd Place Standings</h2>
+            <p className="text-xs text-slate-400 text-center mt-1">Top 8 teams advance. Tiebreakers: Pts &rarr; GD &rarr; GF.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider text-xs border-b border-slate-800">
+                <tr>
+                  <th className="px-4 py-3 font-bold text-center w-12">Rank</th>
+                  <th className="px-4 py-3 font-bold">Team</th>
+                  <th className="px-4 py-3 font-bold text-center">Group</th>
+                  <th className="px-4 py-3 font-bold text-center">Pts</th>
+                  <th className="px-4 py-3 font-bold text-center">GD</th>
+                  <th className="px-4 py-3 font-bold text-center">GF</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                {allThirdPlaceTeams.map((team, index) => {
+                  const record = liveStandings[team] || { pts: 0, gd: 0, gf: 0 };
+                  const group = TOURNAMENT_GROUPS.find(g => g.teams.includes(team))?.name.replace('Group ', '') || '-';
+                  const isAdvancing = index < 8;
+
+                  return (
+                    <tr key={team} className={`transition-colors ${isAdvancing ? 'bg-emerald-900/10 hover:bg-emerald-900/20' : 'bg-slate-950 hover:bg-slate-900 text-slate-500'}`}>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${isAdvancing ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
+                          {index + 1}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-3 font-bold ${isAdvancing ? 'text-slate-200' : 'text-slate-500'}`}>{team}</td>
+                      <td className="px-4 py-3 text-center font-mono">{group}</td>
+                      <td className={`px-4 py-3 text-center font-mono font-bold ${isAdvancing ? 'text-white' : ''}`}>{record.pts}</td>
+                      <td className="px-4 py-3 text-center font-mono">{record.gd}</td>
+                      <td className="px-4 py-3 text-center font-mono">{record.gf}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Floating 3Q Tracker */}
