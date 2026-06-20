@@ -30,7 +30,7 @@ const buildLeaderboard = async () => {
           "United States": "United States", "USA": "United States",
           "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina",
           "Czech Republic": "Czechia", "Korea Republic": "South Korea", "Congo DR": "DR Congo",
-          "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde"
+          "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde", "Curaçao": "Curacao" 
         };
 
         // 1. Fetch Group Stage Standings (with no-store to beat aggressive cache)

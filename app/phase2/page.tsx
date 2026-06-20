@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
-
+export const dynamic = 'force-dynamic';
 // GLOBAL DEADLINES
 const GROUP_STAGE_END_TIME = new Date('2026-06-28T00:10:00-04:00').getTime();
 const KNOCKOUT_START_TIME = new Date('2026-06-28T15:00:00-04:00').getTime();
@@ -100,7 +100,7 @@ export default function Home() {
         "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina", 
         "Czech Republic": "Czechia", "Korea Republic": "South Korea", 
         "Congo DR": "DR Congo", "Côte d'Ivoire": "Ivory Coast", 
-        "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde" 
+        "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde", "Curaçao": "Curacao" 
       };
       try {
         // STEP 1: Predict Knockout Teams based on current live standings
