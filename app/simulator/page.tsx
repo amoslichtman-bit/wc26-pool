@@ -240,22 +240,78 @@ export default function Simulator() {
     setProjectedLeaderboard(projected);
   }, [matches, champion, baseScores, allPhase2Picks]);
 
-  const handlePick = (matchId: number, selectedTeam: string) => {
+const handlePick = (matchId: number, selectedTeam: string) => {
     if (!selectedTeam) return;
     const currentMatch = matches.find(m => m.id === matchId);
-    if (!currentMatch || currentMatch.isFinished) return; // Cannot override reality
-    
-    if (currentMatch.round === 'F') setChampion(selectedTeam);
+    if (!currentMatch || currentMatch.isFinished) return; // Can't rewrite finished real games
+
+    const isUnselecting = currentMatch.winner === selectedTeam;
 
     setMatches(prevMatches => {
-      return prevMatches.map(match => {
-        if (match.id === matchId) return { ...match, winner: selectedTeam };
-        if (match.id === currentMatch.nextMatchId && !match.isFinished) {
-          if (currentMatch.slot === 'home') return { ...match, teamA: selectedTeam, winner: null };
-          else return { ...match, teamB: selectedTeam, winner: null };
+      // Safe deep-copy so we can walk down the tree modifying future rounds
+      let bracket = JSON.parse(JSON.stringify(prevMatches));
+      const target = bracket.find((m: any) => m.id === matchId);
+      const oldWinner = target.winner;
+
+      if (isUnselecting) {
+        // --- CASE 1: UNSELECTING A TEAM ---
+        target.winner = null;
+        if (target.round === 'F') setChampion(null);
+
+        // Walk downstream and scrub this team from any future matches it was pushed into
+        let curr = target;
+        while (curr.nextMatchId) {
+          const nextM = bracket.find((m: any) => m.id === curr.nextMatchId);
+          if (!nextM || nextM.isFinished) break;
+
+          if (curr.slot === 'home') nextM.teamA = '';
+          else nextM.teamB = '';
+
+          if (nextM.winner === selectedTeam) {
+            nextM.winner = null;
+            if (nextM.round === 'F') setChampion(null);
+            curr = nextM; // Move pointer to the next round to keep scrubbing
+          } else {
+            break;
+          }
         }
-        return match;
-      });
+      } else {
+        // --- CASE 2: SELECTING OR SWITCHING A TEAM ---
+        target.winner = selectedTeam;
+        if (target.round === 'F') setChampion(selectedTeam);
+
+        // If a different team was already sitting here, scrub the old team's downstream trail first
+        if (oldWinner) {
+          let curr = target;
+          while (curr.nextMatchId) {
+            const nextM = bracket.find((m: any) => m.id === curr.nextMatchId);
+            if (!nextM || nextM.isFinished) break;
+
+            if (curr.slot === 'home') nextM.teamA = '';
+            else nextM.teamB = '';
+
+            if (nextM.winner === oldWinner) {
+              nextM.winner = null;
+              if (nextM.round === 'F') setChampion(null);
+              curr = nextM;
+            } else {
+              break;
+            }
+          }
+        }
+
+        // Now push our NEW winner into the immediate next round
+        if (target.nextMatchId) {
+          const nextM = bracket.find((m: any) => m.id === target.nextMatchId);
+          if (nextM && !nextM.isFinished) {
+            if (target.slot === 'home') nextM.teamA = selectedTeam;
+            else nextM.teamB = selectedTeam;
+            nextM.winner = null; // Reset next match's winner because the matchup just changed
+          }
+        }
+      }
+
+      return bracket;
     });
   };
 
@@ -289,7 +345,7 @@ export default function Simulator() {
             return (
               <button
                 onClick={() => handlePick(match.id, teamName)}
-                disabled={match.isFinished || !teamName || teamName.includes('Place')}
+                disabled={match.isFinished || !teamName}
                 className={`w-full flex justify-between items-center p-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${btnClass}`}
               >
                 <div className="flex flex-col items-start truncate">

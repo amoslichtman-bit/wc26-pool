@@ -368,7 +368,7 @@ export default function Home() {
           <div className="flex flex-col items-center mb-6 space-y-3">
             <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-6 py-4 rounded-lg text-sm flex flex-col items-center shadow-lg text-center max-w-3xl gap-3">
               <span className="font-bold">
-                ⚠️ This bracket is a companion to Ted's Google Sheets and does not replace any of you Google Sheets duties. Picks remain open here, but your official picks must be locked in the spreadsheet before the knockout stage begins.
+                ⚠️ This bracket is a companion to Ted's Google Sheets and does not replace any of your Google Sheets duties. Picks remain open here, but your official picks must be locked in the spreadsheet before the knockout stage begins.
               </span>
               
               {!isBracketFinalized ? (
