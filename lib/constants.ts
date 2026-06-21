@@ -14,38 +14,53 @@ export const API_TO_COMMON_MAP: Record<string, string> = {
   "Curaçao": "Curacao" 
 };
 
+// OFFICIALLY CORRECTED 2026 FIXTURES
 export const INITIAL_KNOCKOUT_MATCHES = [
-  { id: 1, round: 'R32', nextMatchId: 17, slot: 'home', teamA: '1st Place Group A', teamB: '3Q Groups C/D/E', winner: null },
-  { id: 2, round: 'R32', nextMatchId: 17, slot: 'away', teamA: '2nd Place Group B', teamB: '2nd Place Group C', winner: null },
-  { id: 3, round: 'R32', nextMatchId: 18, slot: 'home', teamA: '1st Place Group D', teamB: '3Q Groups A/B/F', winner: null },
-  { id: 4, round: 'R32', nextMatchId: 18, slot: 'away', teamA: '2nd Place Group E', teamB: '2nd Place Group F', winner: null },
-  { id: 5, round: 'R32', nextMatchId: 19, slot: 'home', teamA: '1st Place Group G', teamB: '3Q Groups G/H/I', winner: null },
-  { id: 6, round: 'R32', nextMatchId: 19, slot: 'away', teamA: '2nd Place Group H', teamB: '2nd Place Group I', winner: null },
-  { id: 7, round: 'R32', nextMatchId: 20, slot: 'home', teamA: '1st Place Group J', teamB: '3Q Groups J/K/L', winner: null },
-  { id: 8, round: 'R32', nextMatchId: 20, slot: 'away', teamA: '2nd Place Group K', teamB: '2nd Place Group L', winner: null },
-  { id: 9, round: 'R32', nextMatchId: 21, slot: 'home', teamA: '1st Place Group B', teamB: '3Q Groups A/C/D', winner: null },
-  { id: 10, round: 'R32', nextMatchId: 21, slot: 'away', teamA: '1st Place Group C', teamB: '2nd Place Group A', winner: null },
-  { id: 11, round: 'R32', nextMatchId: 22, slot: 'home', teamA: '1st Place Group E', teamB: '3Q Groups B/E/F', winner: null },
-  { id: 12, round: 'R32', nextMatchId: 22, slot: 'away', teamA: '1st Place Group F', teamB: '2nd Place Group D', winner: null },
-  { id: 13, round: 'R32', nextMatchId: 23, slot: 'home', teamA: '1st Place Group H', teamB: '3Q Groups G/I/J', winner: null },
-  { id: 14, round: 'R32', nextMatchId: 23, slot: 'away', teamA: '1st Place Group I', teamB: '2nd Place Group G', winner: null },
-  { id: 15, round: 'R32', nextMatchId: 24, slot: 'home', teamA: '1st Place Group K', teamB: '3Q Groups H/K/L', winner: null },
-  { id: 16, round: 'R32', nextMatchId: 24, slot: 'away', teamA: '1st Place Group L', teamB: '2nd Place Group J', winner: null },
-  { id: 17, round: 'R16', nextMatchId: 25, slot: 'home', teamA: '', teamB: '', winner: null },
-  { id: 18, round: 'R16', nextMatchId: 25, slot: 'away', teamA: '', teamB: '', winner: null },
-  { id: 19, round: 'R16', nextMatchId: 26, slot: 'home', teamA: '', teamB: '', winner: null },
-  { id: 20, round: 'R16', nextMatchId: 26, slot: 'away', teamA: '', teamB: '', winner: null },
-  { id: 21, round: 'R16', nextMatchId: 27, slot: 'home', teamA: '', teamB: '', winner: null },
-  { id: 22, round: "R16", nextMatchId: 27, slot: 'away', teamA: '', teamB: '', winner: null },
-  { id: 23, round: 'R16', nextMatchId: 28, slot: 'home', teamA: '', teamB: '', winner: null },
-  { id: 24, round: 'R16', nextMatchId: 28, slot: 'away', teamA: '', teamB: '', winner: null },
-  { id: 25, round: 'QF', nextMatchId: 29, slot: 'home', teamA: '', teamB: '', winner: null },
-  { id: 26, round: 'QF', nextMatchId: 29, slot: 'away', teamA: '', teamB: '', winner: null },
-  { id: 27, round: 'QF', nextMatchId: 30, slot: 'home', teamA: '', teamB: '', winner: null },
-  { id: 28, round: 'QF', nextMatchId: 30, slot: 'away', teamA: '', teamB: '', winner: null },
-  { id: 29, round: 'SF', nextMatchId: 31, slot: 'home', teamA: '', teamB: '', winner: null },
-  { id: 30, round: 'SF', nextMatchId: 31, slot: 'away', teamA: '', teamB: '', winner: null },
-  { id: 31, round: 'F', nextMatchId: null, slot: null, teamA: '', teamB: '', winner: null },
+  // LEFT SIDE OF BRACKET
+  { id: 1, round: 'R32', nextMatchId: 17, slot: 'home', teamA: '1st Place Group E', teamB: '3Q Groups A/B/C/D/F', winner: null }, // Match 74
+  { id: 2, round: 'R32', nextMatchId: 17, slot: 'away', teamA: '1st Place Group I', teamB: '3Q Groups C/D/F/G/H', winner: null }, // Match 77
+  { id: 3, round: 'R32', nextMatchId: 18, slot: 'home', teamA: '2nd Place Group A', teamB: '2nd Place Group B', winner: null }, // Match 73
+  { id: 4, round: 'R32', nextMatchId: 18, slot: 'away', teamA: '1st Place Group F', teamB: '2nd Place Group C', winner: null }, // Match 75
+  
+  { id: 5, round: 'R32', nextMatchId: 19, slot: 'home', teamA: '1st Place Group C', teamB: '2nd Place Group F', winner: null }, // Match 76
+  { id: 6, round: 'R32', nextMatchId: 19, slot: 'away', teamA: '2nd Place Group E', teamB: '2nd Place Group I', winner: null }, // Match 78
+  { id: 7, round: 'R32', nextMatchId: 20, slot: 'home', teamA: '1st Place Group A', teamB: '3Q Groups C/E/F/H/I', winner: null }, // Match 79
+  { id: 8, round: 'R32', nextMatchId: 20, slot: 'away', teamA: '1st Place Group L', teamB: '3Q Groups E/H/I/J/K', winner: null }, // Match 80
+  
+  // RIGHT SIDE OF BRACKET
+  { id: 9, round: 'R32', nextMatchId: 21, slot: 'home', teamA: '2nd Place Group K', teamB: '2nd Place Group L', winner: null }, // Match 83
+  { id: 10, round: 'R32', nextMatchId: 21, slot: 'away', teamA: '1st Place Group H', teamB: '2nd Place Group J', winner: null }, // Match 84
+  { id: 11, round: 'R32', nextMatchId: 22, slot: 'home', teamA: '1st Place Group D', teamB: '3Q Groups B/E/F/I/J', winner: null }, // Match 81
+  { id: 12, round: 'R32', nextMatchId: 22, slot: 'away', teamA: '1st Place Group G', teamB: '3Q Groups A/E/H/I/J', winner: null }, // Match 82
+  
+  { id: 13, round: 'R32', nextMatchId: 23, slot: 'home', teamA: '1st Place Group J', teamB: '2nd Place Group H', winner: null }, // Match 86
+  { id: 14, round: 'R32', nextMatchId: 23, slot: 'away', teamA: '2nd Place Group D', teamB: '2nd Place Group G', winner: null }, // Match 88
+  { id: 15, round: 'R32', nextMatchId: 24, slot: 'home', teamA: '1st Place Group B', teamB: '3Q Groups E/F/G/I/J', winner: null }, // Match 85
+  { id: 16, round: 'R32', nextMatchId: 24, slot: 'away', teamA: '1st Place Group K', teamB: '3Q Groups D/E/I/J/L', winner: null }, // Match 87
+
+  // ROUND OF 16
+  { id: 17, round: 'R16', nextMatchId: 25, slot: 'home', teamA: '', teamB: '', winner: null }, // Match 89
+  { id: 18, round: 'R16', nextMatchId: 25, slot: 'away', teamA: '', teamB: '', winner: null }, // Match 90
+  { id: 19, round: 'R16', nextMatchId: 26, slot: 'home', teamA: '', teamB: '', winner: null }, // Match 91
+  { id: 20, round: 'R16', nextMatchId: 26, slot: 'away', teamA: '', teamB: '', winner: null }, // Match 92
+  
+  { id: 21, round: 'R16', nextMatchId: 27, slot: 'home', teamA: '', teamB: '', winner: null }, // Match 93
+  { id: 22, round: "R16", nextMatchId: 27, slot: 'away', teamA: '', teamB: '', winner: null }, // Match 94
+  { id: 23, round: 'R16', nextMatchId: 28, slot: 'home', teamA: '', teamB: '', winner: null }, // Match 95
+  { id: 24, round: 'R16', nextMatchId: 28, slot: 'away', teamA: '', teamB: '', winner: null }, // Match 96
+
+  // QUARTERFINALS
+  { id: 25, round: 'QF', nextMatchId: 29, slot: 'home', teamA: '', teamB: '', winner: null }, // Match 97
+  { id: 26, round: 'QF', nextMatchId: 29, slot: 'away', teamA: '', teamB: '', winner: null }, // Match 98
+  { id: 27, round: 'QF', nextMatchId: 30, slot: 'home', teamA: '', teamB: '', winner: null }, // Match 99
+  { id: 28, round: 'QF', nextMatchId: 30, slot: 'away', teamA: '', teamB: '', winner: null }, // Match 100
+
+  // SEMIFINALS
+  { id: 29, round: 'SF', nextMatchId: 31, slot: 'home', teamA: '', teamB: '', winner: null }, // Match 101
+  { id: 30, round: 'SF', nextMatchId: 31, slot: 'away', teamA: '', teamB: '', winner: null }, // Match 102
+
+  // FINAL
+  { id: 31, round: 'F', nextMatchId: null, slot: null, teamA: '', teamB: '', winner: null }, // Match 104
 ];
 
 export const TOURNAMENT_GROUPS = [
@@ -68,4 +83,49 @@ export function sortStandingsTable(a: any, b: any) {
   if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
   if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
   return 0;
+}
+
+// --- FIFA 3RD PLACE MATRIX SOLVER ---
+
+// The 8 official knockout slots that require a 3rd place team, and their allowed groups
+export const THIRD_PLACE_SLOTS = [
+  { matchId: 1, allowedGroups: ['A', 'B', 'C', 'D', 'F'] },
+  { matchId: 2, allowedGroups: ['C', 'D', 'F', 'G', 'H'] },
+  { matchId: 7, allowedGroups: ['C', 'E', 'F', 'H', 'I'] },
+  { matchId: 8, allowedGroups: ['E', 'H', 'I', 'J', 'K'] },
+  { matchId: 11, allowedGroups: ['B', 'E', 'F', 'I', 'J'] },
+  { matchId: 12, allowedGroups: ['A', 'E', 'H', 'I', 'J'] },
+  { matchId: 15, allowedGroups: ['E', 'F', 'G', 'I', 'J'] },
+  { matchId: 16, allowedGroups: ['D', 'E', 'I', 'J', 'L'] }
+];
+
+export function assignThirdPlaceTeams(advancingThirds: {team: string, group: string}[]) {
+  const result: Record<number, string> = {};
+  const usedTeams = new Set<string>();
+
+  function backtrack(slotIndex: number): boolean {
+    if (slotIndex === THIRD_PLACE_SLOTS.length) return true; // All slots filled successfully!
+
+    const currentSlot = THIRD_PLACE_SLOTS[slotIndex];
+
+    for (const team of advancingThirds) {
+      if (!usedTeams.has(team.team) && currentSlot.allowedGroups.includes(team.group)) {
+        
+        // Try assigning this team to this slot
+        result[currentSlot.matchId] = team.team;
+        usedTeams.add(team.team);
+
+        // Move to the next slot
+        if (backtrack(slotIndex + 1)) return true;
+
+        // If it failed downstream, undo this choice and try the next team
+        delete result[currentSlot.matchId];
+        usedTeams.delete(team.team);
+      }
+    }
+    return false; // No valid team found, trigger backtracking
+  }
+
+  const success = backtrack(0);
+  return success ? result : null;
 }
