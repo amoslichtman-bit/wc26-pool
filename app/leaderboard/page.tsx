@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-
-// Add this line to disable caching for this page
+import { API_TO_COMMON_MAP } from '../../lib/constants';
 export const dynamic = 'force-dynamic';
 
 export default function Leaderboard() {
@@ -26,13 +25,6 @@ const buildLeaderboard = async () => {
           'R32': [], 'R16': [], 'QF': [], 'SF': [], 'CHAMPION': []
         };
 
-        const API_TO_SHEET_MAP: Record<string, string> = {
-          "United States": "United States", "USA": "United States",
-          "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina",
-          "Czech Republic": "Czechia", "Korea Republic": "South Korea", "Congo DR": "DR Congo",
-          "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde", "Curaçao": "Curacao" 
-        };
-
         // 1. Fetch Group Stage Standings (with no-store to beat aggressive cache)
         const apiRes = await fetch('/api/standings', { cache: 'no-store' });
         if (apiRes.ok) {
@@ -44,7 +36,7 @@ const buildLeaderboard = async () => {
             groups.forEach((group: any) => {
               group.table.forEach((row: any, index: number) => {
                 const apiName = row.team.name;
-                const teamName = API_TO_SHEET_MAP[apiName] || apiName;
+                const teamName = API_TO_COMMON_MAP[apiName] || apiName;
                 
                 const rank = index + 1;
                 currentStandings[teamName] = { rank, pts: row.points, gd: row.goalDifference, gf: row.goalsFor || 0 };
@@ -71,7 +63,7 @@ const buildLeaderboard = async () => {
                 else if (match.score?.winner === 'AWAY_TEAM') winner = match.awayTeam?.name;
                 
                 if (winner) {
-                  winner = API_TO_SHEET_MAP[winner] || winner;
+                  winner = API_TO_COMMON_MAP[winner] || winner;
                   
                   if (match.stage === 'LAST_32') actualKnockoutResults['R32'].push(winner);
                   else if (match.stage === 'LAST_16') actualKnockoutResults['R16'].push(winner);
