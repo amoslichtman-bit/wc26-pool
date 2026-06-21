@@ -6,6 +6,21 @@ import { useRouter } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
+const TOURNAMENT_GROUPS = [
+  { name: 'Group A', teams: ['Czechia', 'Mexico', 'South Africa', 'South Korea'] },
+  { name: 'Group B', teams: ['Bosnia & Herzigovina', 'Canada', 'Switzerland', 'Qatar'] },
+  { name: 'Group C', teams: ['Brazil', 'Haiti', 'Morocco', 'Scotland'] },
+  { name: 'Group D', teams: ['Australia', 'Paraguay', 'Turkey', 'United States'] },
+  { name: 'Group E', teams: ['Curacao', 'Ecuador', 'Germany', 'Ivory Coast'] },
+  { name: 'Group F', teams: ['Japan', 'Netherlands', 'Sweden', 'Tunisia'] },
+  { name: 'Group G', teams: ['Belgium', 'Egypt', 'Iran', 'New Zealand'] },
+  { name: 'Group H', teams: ['Cape Verde', 'Saudi Arabia', 'Spain', 'Uruguay'] },
+  { name: 'Group I', teams: ['France', 'Iraq', 'Norway', 'Senegal'] },
+  { name: 'Group J', teams: ['Algeria', 'Argentina', 'Austria', 'Jordan'] },
+  { name: 'Group K', teams: ['Colombia', 'DR Congo', 'Portugal', 'Uzbekistan'] },
+  { name: 'Group L', teams: ['Croatia', 'England', 'Ghana', 'Panama'] },
+];
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
@@ -84,8 +99,9 @@ export default function AdminDashboard() {
     if (isCurrentlyAdmin) {
       const { error } = await supabase.from('user_roles').delete().eq('user_id', userId).eq('role', 'admin');
       if (!error) {
+        // keep profiles.is_admin in sync
         const { error: profileErr } = await supabase.from('profiles').update({ is_admin: false }).eq('id', userId);
-        if (profileErr) console.warn('Failed to update profiles.is_admin:', profileErr);
+        if (profileErr) console.warn('Failed to update profiles.is_admin:', profileErr.message || profileErr);
         fetchProfiles();
       } else alert("Error removing admin: " + error.message);
     } else {
@@ -93,14 +109,15 @@ export default function AdminDashboard() {
         { user_id: userId, role: 'admin' }
       ], { onConflict: 'user_id' });
       if (!error) {
+        // keep profiles.is_admin in sync
         const { error: profileErr } = await supabase.from('profiles').update({ is_admin: true }).eq('id', userId);
-        if (profileErr) console.warn('Failed to update profiles.is_admin:', profileErr);
+        if (profileErr) console.warn('Failed to update profiles.is_admin:', profileErr.message || profileErr);
         fetchProfiles();
       } else alert("Error assigning admin: " + error.message);
     }
   };
 
-  // --- BULK IMPORT FUNCTION (UPDATED FOR PHASE 2 / KNOCKOUTS) ---
+  // --- BULK IMPORT FUNCTION ---
   const handleBulkImport = async () => {
     if (!importData.trim()) return;
     setIsImporting(true);
@@ -108,19 +125,18 @@ export default function AdminDashboard() {
 
     try {
       const rows = importData.trim().split('\n');
-      const parsedPicks: { playerName: string, team: string, round: string }[] = [];
+      const parsedPicks: { playerName: string, team: string, rank: string }[] = [];
 
       rows.forEach(row => {
         const columns = row.split('\t').map(col => col.trim());
         if (columns.length >= 3 && columns[0] !== '') {
-          parsedPicks.push({ playerName: columns[0], team: columns[1], round: columns[2] });
+          parsedPicks.push({ playerName: columns[0], team: columns[1], rank: columns[2] });
         }
       });
 
       if (parsedPicks.length === 0) throw new Error("Could not parse data. Ensure it is copied directly from Sheets.");
 
       const players = Array.from(new Set(parsedPicks.map(p => p.playerName)));
-      const validRounds = ['R32', 'R16', 'QF', 'SF', 'F', 'CHAMPION', 'TIEBREAKER'];
 
       for (const playerName of players) {
         let profileId = profiles.find(p => p.display_name?.toLowerCase() === playerName.toLowerCase())?.id;
@@ -132,24 +148,22 @@ export default function AdminDashboard() {
 
         const playerPicks = parsedPicks.filter(p => p.playerName === playerName);
         const dbPicksToInsert = playerPicks.map(pick => {
-          const cleanRound = String(pick.round).toUpperCase().trim();
+          const groupName = TOURNAMENT_GROUPS.find(g => g.teams.includes(pick.team))?.name || 'Unknown';
+          const cleanRank = String(pick.rank).toUpperCase().replace(/[^1234Q]/g, '');
 
-          if (!validRounds.includes(cleanRound)) {
-            throw new Error(`Invalid round found for ${pick.playerName} on ${pick.team}. Expected R32, R16, QF, SF, F, CHAMPION, or TIEBREAKER, but got: "${pick.round}"`);
+          if (!['1', '2', '3', '3Q', '4'].includes(cleanRank)) {
+            throw new Error(`Invalid rank found for ${pick.playerName} on ${pick.team}. Expected 1, 2, 3, 3Q, or 4, but got: "${pick.rank}"`);
           }
 
-          return { user_id: profileId, team_name: pick.team, predicted_round: cleanRound };
+          return { user_id: profileId, group_name: groupName, team_name: pick.team, placement: cleanRank };
         });
 
-        // Clear out old knockout picks for this user before importing
-        await supabase.from('phase_2_picks').delete().eq('user_id', profileId);
-        
-        // Insert new knockout picks
-        const { error: insertErr } = await supabase.from('phase_2_picks').insert(dbPicksToInsert);
+        await supabase.from('phase_1_picks').delete().eq('user_id', profileId);
+        const { error: insertErr } = await supabase.from('phase_1_picks').insert(dbPicksToInsert);
         if (insertErr) throw insertErr;
       }
 
-      setImportStatus({ text: `Successfully imported ${parsedPicks.length} knockout picks across ${players.length} players!`, type: 'success' });
+      setImportStatus({ text: `Successfully imported ${parsedPicks.length} picks across ${players.length} players!`, type: 'success' });
       setImportData('');
       fetchProfiles();
     } catch (err: any) {
@@ -168,7 +182,7 @@ export default function AdminDashboard() {
       <div className="max-w-7xl mx-auto space-y-10">
         <header>
           <h1 className="text-4xl font-black text-amber-500 mb-2">Admin Control Panel</h1>
-          <p className="text-slate-400">Manage users, import knockout data, and lock brackets.</p>
+          <p className="text-slate-400">Manage users, import data, and lock brackets.</p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -185,20 +199,20 @@ export default function AdminDashboard() {
           </div>
 
           {/* Bulk Import */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl border-t-4 border-t-amber-500">
-            <h2 className="text-lg font-bold text-amber-400 mb-2">Knockout Stage Bulk Import</h2>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl border-t-4 border-t-emerald-500">
+            <h2 className="text-lg font-bold text-emerald-400 mb-2">Google Sheets Bulk Import</h2>
             <p className="text-xs text-slate-400 mb-4">
               Highlight rows in Google Sheets (No Headers) formatted as: <br/>
-              <strong className="text-slate-300">Player Name | Team Name | Round (R32, R16, QF, SF, F, CHAMPION, TIEBREAKER)</strong>
+              <strong className="text-slate-300">Player Name | Team Name | Rank (1, 2, 3Q, 3, 4)</strong>
             </p>
-            <textarea value={importData} onChange={(e) => setImportData(e.target.value)} placeholder={`Amos\tUSA\tR32\nAmos\tGermany\tR16\nAmos\tBrazil\tCHAMPION\nAmos\t2-1\tTIEBREAKER`} className="w-full h-32 bg-slate-950 border border-slate-800 rounded-lg p-4 text-xs text-slate-300 font-mono focus:border-amber-500 outline-none mb-4 whitespace-pre" />
+            <textarea value={importData} onChange={(e) => setImportData(e.target.value)} placeholder={`Amos\tUSA\t1\nAmos\tWales\t2...`} className="w-full h-32 bg-slate-950 border border-slate-800 rounded-lg p-4 text-xs text-slate-300 font-mono focus:border-emerald-500 outline-none mb-4 whitespace-pre" />
             {importStatus && (
               <div className={`mb-4 p-3 rounded-lg text-sm font-bold ${importStatus.type === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'}`}>
                 {importStatus.text}
               </div>
             )}
-            <button onClick={handleBulkImport} disabled={isImporting || !importData.trim()} className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 px-8 rounded-lg transition-colors disabled:opacity-50">
-              {isImporting ? 'Processing Data...' : 'Run Knockout Import'}
+            <button onClick={handleBulkImport} disabled={isImporting || !importData.trim()} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-lg transition-colors disabled:opacity-50">
+              {isImporting ? 'Processing Data...' : ' Run Bulk Import'}
             </button>
           </div>
         </div>

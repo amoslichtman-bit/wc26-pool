@@ -3,9 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
-
 export const dynamic = 'force-dynamic';
-
 // GLOBAL DEADLINES
 const GROUP_STAGE_END_TIME = new Date('2026-06-28T00:10:00-04:00').getTime();
 const KNOCKOUT_START_TIME = new Date('2026-06-28T15:00:00-04:00').getTime();
@@ -47,17 +45,10 @@ const INITIAL_MATCHES = [
 export default function Home() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  
-  // User's Interactive Bracket
   const [matches, setMatches] = useState<any[]>(INITIAL_MATCHES);   
   const [baseBracket, setBaseBracket] = useState<any[]>([]); 
   const [champion, setChampion] = useState<string | null>(null);
   const [tiebreakerScore, setTiebreakerScore] = useState<string>('');
-  
-  // Real-Life Tournament Data (For March Madness Visual Scoring)
-  const [actualBracket, setActualBracket] = useState<any[]>([]);
-  const [actualChampion, setActualChampion] = useState<string | null>(null);
-  const [eliminatedTeams, setEliminatedTeams] = useState<Set<string>>(new Set());
   
   const [profiles, setProfiles] = useState<any[]>([]);
   const [allPhase2Picks, setAllPhase2Picks] = useState<any[]>([]);
@@ -75,7 +66,7 @@ export default function Home() {
   const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
   const [adminEditMode, setAdminEditMode] = useState(false);
 
-  // Global View Logic (Companion Mode: stays unlocked unless viewing others)
+  // Global View Logic
   const targetUserId = viewingUserId || user?.id;
   const isViewingOther = targetUserId && targetUserId !== user?.id;
   const inputIsDisabled = isViewingOther && !(currentUserIsAdmin && adminEditMode);
@@ -109,17 +100,19 @@ export default function Home() {
         "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina", 
         "Czech Republic": "Czechia", "Korea Republic": "South Korea", 
         "Congo DR": "DR Congo", "Côte d'Ivoire": "Ivory Coast", 
-        "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde", 
-        "Curaçao": "Curacao" 
+        "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde", "Curaçao": "Curacao" 
       };
-
       try {
-        // STEP 1: Predict Knockout Teams based on live standings
+        // STEP 1: Predict Knockout Teams based on current live standings
+        // Add { cache: 'no-store' } to bypass aggressive caching
         const standingsRes = await fetch('/api/standings', { cache: 'no-store' });
         if (standingsRes.ok) {
           const sData = await standingsRes.json();
           const groupRanks: Record<string, string[]> = {};
           const thirds: any[] = [];
+          
+          // ... (existing groupStandings logic remains unchanged) ...
+        
           
           const groupStandings = sData.standings?.filter((s: any) => s.type === 'TOTAL') || [];
           groupStandings.forEach((group: any) => {
@@ -165,14 +158,13 @@ export default function Home() {
           });
         }
 
-        // STEP 2: Overwrite projections with actual match data & Build Visual Simulation Tree
+        // STEP 2: Overwrite projections with actual official match data if the API provides it
+// Add { cache: 'no-store' } to bypass aggressive caching
         const apiRes = await fetch('/api/matches', { cache: 'no-store' });
         if (apiRes.ok) {
           const data = await apiRes.json();
           if (data.matches && data.matches.length > 0) {
             const r32Matches = data.matches.filter((m: any) => m.stage === 'LAST_32');
-            
-            // Overwrite Round of 32 names
             dynamicMatches = dynamicMatches.map((m: any) => {
               if (m.round === 'R32' && r32Matches[m.id - 1]) {
                 const apiMatch = r32Matches[m.id - 1];
@@ -183,59 +175,6 @@ export default function Home() {
               }
               return m;
             });
-
-            // Build the Real-Life Tournament Simulation Tree
-            let realMatches = JSON.parse(JSON.stringify(dynamicMatches));
-            let elimSet = new Set<string>();
-            let realChamp = null;
-
-            const processStage = (apiStageMatches: any[], roundString: string) => {
-                if (!apiStageMatches || apiStageMatches.length === 0) return;
-                const roundMatches = realMatches.filter((m: any) => m.round === roundString);
-
-                apiStageMatches.forEach((apiM, index) => {
-                    if (apiM.status === 'FINISHED' && roundMatches[index]) {
-                        let winnerName = null;
-                        let loserName = null;
-
-                        if (apiM.score?.winner === 'HOME_TEAM') {
-                            winnerName = apiM.homeTeam?.name;
-                            loserName = apiM.awayTeam?.name;
-                        } else if (apiM.score?.winner === 'AWAY_TEAM') {
-                            winnerName = apiM.awayTeam?.name;
-                            loserName = apiM.homeTeam?.name;
-                        }
-
-                        if (loserName) elimSet.add(API_MAP[loserName] || loserName);
-
-                        if (winnerName) {
-                            const formattedWinner = API_MAP[winnerName] || winnerName;
-                            const matchToUpdate = roundMatches[index];
-                            matchToUpdate.winner = formattedWinner;
-
-                            if (matchToUpdate.nextMatchId) {
-                                const nextM = realMatches.find((m: any) => m.id === matchToUpdate.nextMatchId);
-                                if (nextM) {
-                                    if (matchToUpdate.slot === 'home') nextM.teamA = formattedWinner;
-                                    else nextM.teamB = formattedWinner;
-                                }
-                            } else if (roundString === 'F') {
-                                realChamp = formattedWinner;
-                            }
-                        }
-                    }
-                });
-            };
-
-            processStage(r32Matches, 'R32');
-            processStage(data.matches.filter((m: any) => m.stage === 'LAST_16'), 'R16');
-            processStage(data.matches.filter((m: any) => m.stage === 'QUARTER_FINALS'), 'QF');
-            processStage(data.matches.filter((m: any) => m.stage === 'SEMI_FINALS'), 'SF');
-            processStage(data.matches.filter((m: any) => m.stage === 'FINAL'), 'F');
-
-            setActualBracket(realMatches);
-            setEliminatedTeams(elimSet);
-            setActualChampion(realChamp);
           }
         }
       } catch(e) { 
@@ -373,8 +312,7 @@ export default function Home() {
 
   const formatTeamName = (name: string) => {
     if (!name) return 'TBD';
-    if (name.includes('Place') || name.includes('3Q') || isBracketFinalized) return name;
-    return `${name} (Prelim)`;
+    return name;
   };
 
   const renderRound = (roundName: string, title: string) => {
@@ -385,187 +323,111 @@ export default function Home() {
         <h3 className="text-center font-bold text-slate-500 uppercase tracking-widest text-xs mb-2 sticky top-0 bg-slate-950 py-2 z-10">
           {title}
         </h3>
-        {roundMatches.map(match => {
-          const actualMatch = actualBracket.find(m => m.id === match.id);
-          const isMatchFinished = actualMatch && actualMatch.winner !== null;
+        {roundMatches.map(match => (
+          <div key={match.id} className="bg-slate-900 border border-slate-800 rounded-xl shadow-xl p-2 space-y-1.5 relative">
+            <button
+              onClick={() => handlePick(match.id, match.teamA)}
+              disabled={!match.teamA || match.teamA.includes('Place') || match.teamA.includes('3Q') || inputIsDisabled}
+              className={`w-full flex justify-between items-center p-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                match.winner === match.teamA ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' 
+                : match.teamA && !match.teamA.includes('Place') && !match.teamA.includes('3Q') && !inputIsDisabled
+                  ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-transparent' 
+                  : 'bg-slate-800/50 text-slate-700 border border-transparent cursor-not-allowed'
+              }`}
+            >
+              <span className="truncate pr-2">{formatTeamName(match.teamA)}</span>
+            </button>
 
-          const renderButtonContent = (teamName: string) => {
-            const isSelected = match.winner === teamName;
-            const isBtnDisabled = !teamName || teamName.includes('Place') || teamName.includes('3Q') || inputIsDisabled;
+            <div className="absolute left-0 right-0 top-1/2 h-px bg-slate-800 -z-10"></div>
 
-            let btnClass = 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-transparent';
-            let content = <span className="truncate pr-2">{formatTeamName(teamName)}</span>;
-
-            if (isSelected) {
-              if (isMatchFinished) {
-                  if (actualMatch.winner === teamName) {
-                      // Correct Pick (Green)
-                      btnClass = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50';
-                      content = (
-                          <div className="flex flex-col text-left truncate">
-                              <span className="truncate pr-2 font-bold">{formatTeamName(teamName)}</span>
-                              <span className="text-[9px] text-emerald-500 uppercase tracking-wider font-black">✓ Correct</span>
-                          </div>
-                      );
-                  } else {
-                      // Incorrect Pick (Red Strikethrough + Actual Winner below)
-                      btnClass = 'bg-red-500/10 text-red-400 border border-red-500/30';
-                      content = (
-                          <div className="flex flex-col text-left truncate">
-                              <span className="truncate pr-2 line-through opacity-60">{formatTeamName(teamName)}</span>
-                              <span className="text-[10px] text-emerald-400 font-bold mt-0.5 leading-tight">Real: {actualMatch.winner}</span>
-                          </div>
-                      );
-                  }
-              } else if (eliminatedTeams.has(teamName)) {
-                  // Pending match, but team is mathematically busted
-                  btnClass = 'bg-red-500/10 text-red-400 border border-red-500/30';
-                  content = (
-                      <div className="flex flex-col text-left truncate">
-                          <span className="truncate pr-2 line-through opacity-60">{formatTeamName(teamName)}</span>
-                          <span className="text-[9px] text-red-500 font-bold mt-0.5 uppercase tracking-wider">Eliminated</span>
-                      </div>
-                  );
-              } else {
-                  // Selected and alive (Sky Blue)
-                  btnClass = 'bg-sky-500/20 text-sky-400 border border-sky-500/50 shadow-[0_0_10px_rgba(14,165,233,0.1)]';
-                  content = <span className="truncate pr-2 font-bold">{formatTeamName(teamName)}</span>;
-              }
-            } else if (isBtnDisabled) {
-                btnClass = 'bg-slate-800/50 text-slate-700 border border-transparent cursor-not-allowed';
-            }
-
-            return (
-              <button
-                onClick={() => handlePick(match.id, teamName)}
-                disabled={isBtnDisabled}
-                className={`w-full flex justify-between items-center p-2 rounded-lg text-xs transition-all duration-200 ${btnClass}`}
-              >
-                {content}
-              </button>
-            );
-          };
-
-          return (
-            <div key={match.id} className="bg-slate-900 border border-slate-800 rounded-xl shadow-xl p-2 space-y-1.5 relative">
-              {renderButtonContent(match.teamA)}
-              <div className="absolute left-0 right-0 top-1/2 h-px bg-slate-800 -z-10"></div>
-              {renderButtonContent(match.teamB)}
-            </div>
-          );
-        })}
+            <button
+              onClick={() => handlePick(match.id, match.teamB)}
+              disabled={!match.teamB || match.teamB.includes('Place') || match.teamB.includes('3Q') || inputIsDisabled}
+              className={`w-full flex justify-between items-center p-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                match.winner === match.teamB ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' 
+                : match.teamB && !match.teamB.includes('Place') && !match.teamB.includes('3Q') && !inputIsDisabled
+                  ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-transparent' 
+                  : 'bg-slate-800/50 text-slate-700 border border-transparent cursor-not-allowed'
+              }`}
+            >
+              <span className="truncate pr-2">{formatTeamName(match.teamB)}</span>
+            </button>
+          </div>
+        ))}
       </div>
     );
   };
 
   const activeProfile = profiles.find(p => p.id === viewingUserId);
 
-  // Champion Box March Madness Visuals
-  let champClass = 'bg-slate-900 border-slate-800 border-dashed';
-  let champContent = <div className="text-slate-600 font-medium py-8">Awaiting Finalist</div>;
-
-  if (champion) {
-      if (actualChampion) {
-          if (actualChampion === champion) {
-              champClass = 'bg-emerald-500/20 border border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.2)] scale-105';
-              champContent = (
-                  <div className="flex flex-col items-center py-4">
-                      <span className="text-2xl font-black text-emerald-400 tracking-wide">{formatTeamName(champion)}</span>
-                      <span className="text-xs text-emerald-500 font-black uppercase tracking-widest mt-2">✓ Correct Champion</span>
-                  </div>
-              );
-          } else {
-              champClass = 'bg-red-500/10 border border-red-500/30 scale-105';
-              champContent = (
-                  <div className="flex flex-col items-center py-4">
-                      <span className="text-2xl font-black text-red-400/60 tracking-wide line-through">{formatTeamName(champion)}</span>
-                      <span className="text-sm text-emerald-400 font-bold uppercase tracking-widest mt-2">Real: {actualChampion}</span>
-                  </div>
-              );
-          }
-      } else if (eliminatedTeams.has(champion)) {
-           champClass = 'bg-red-500/10 border border-red-500/30 scale-105';
-           champContent = (
-               <div className="flex flex-col items-center py-4">
-                   <span className="text-2xl font-black text-red-400/60 tracking-wide line-through">{formatTeamName(champion)}</span>
-                   <span className="text-xs text-red-500 font-bold uppercase tracking-widest mt-2">Eliminated</span>
-               </div>
-           );
-      } else {
-           champClass = 'bg-sky-500/10 border border-sky-500/50 shadow-[0_0_20px_rgba(14,165,233,0.1)] scale-105';
-           champContent = <div className="text-2xl font-black text-sky-400 tracking-wide py-4">{formatTeamName(champion)}</div>;
-      }
-  }
-
   return (
-    <main className="min-h-screen p-4 sm:p-8 bg-slate-950 text-slate-200 font-sans pb-24">
+    <main className="min-h-screen p-4 sm:p-8 bg-slate-950 text-slate-200 font-sans">
       <div className="max-w-[1600px] mx-auto">
         
-        {/* --- FULLY RESTORED COMPANION & WARNING HEADER --- */}
-        <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-6 py-4 rounded-2xl text-sm flex flex-col items-center shadow-2xl text-center max-w-3xl mx-auto gap-2.5 mb-8">
-          <span className="font-extrabold text-base text-amber-300">
-            ⚠️ Ted's Google Sheets Companion Bracket
-          </span>
-          <span className="text-slate-300 leading-relaxed">
-            This bracket is meant as a companion tool and does not replace your official Google Sheets duties. Picks remain open here, but your official picks must be locked in the spreadsheet before the knockout stage begins.
-          </span>
-          <div className="h-px bg-amber-500/20 w-full my-0.5"></div>
-          {!isBracketFinalized ? (
-            <span className="text-amber-200/90 font-medium">
-              🚨 <strong className="text-white uppercase tracking-wider font-bold">Preliminary Status:</strong> Matchups currently displayed are best-guess projections based on live group standings. The bracket will permanently lock in actual teams from the API when the Group Stage concludes.
-            </span>
-          ) : (
-            <span className="text-emerald-400 font-bold">
-              ✅ <strong className="text-white uppercase tracking-wider font-bold">Official Matchups Active:</strong> Group stage complete. The bracket is now fully populated with official matchups.
-            </span>
-          )}
-          <span className="text-xs font-mono bg-amber-500/20 text-amber-200 px-3 py-1 rounded-md border border-amber-500/30 mt-1">
-            Official Finalized Bracket Window: June 28 at 12:10 AM ET — June 28 at 3:00 PM ET
-          </span>
-        </div>
+        <header className="mb-8 flex flex-col items-center">          
+          <div className="flex flex-col items-center mb-6 space-y-3">
+            <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-6 py-4 rounded-lg text-sm flex flex-col items-center shadow-lg text-center max-w-3xl gap-3">
+              <span className="font-bold">
+                ⚠️ This bracket is a companion to Ted's Google Sheets and does not replace any of you Google Sheets duties. Picks remain open here, but your official picks must be locked in the spreadsheet before the knockout stage begins.
+              </span>
+              
+              {!isBracketFinalized ? (
+                <span className="text-xs font-medium text-amber-200/80">
+                  Teams currently shown are preliminary projections. The bracket will refresh with the actual knockout round teams when the group stage ends.
+                </span>
+              ) : (
+                <span className="text-xs font-bold text-emerald-400">
+                  Group stage complete. The bracket is now populated with official matchups.
+                </span>
+              )}
+              
+              <span className="text-xs font-bold mt-1 bg-amber-500/20 px-3 py-1.5 rounded-md border border-amber-500/30">
+                Official Finalized Bracket Window: June 28 at 12:10 AM ET — June 28 at 3:00 PM ET
+              </span>
+            </div>
+          </div>
 
-        {/* View Selection Dropdown */}
-        <div className="max-w-3xl mx-auto mb-6 flex flex-col sm:flex-row items-center justify-between bg-slate-900/50 p-4 rounded-xl border border-slate-800">
-           <div className="flex items-center space-x-3 w-full sm:w-auto">
-             <label className="text-slate-400 font-bold text-sm uppercase tracking-wide">View Bracket:</label>
-             <select
-               className="bg-slate-950 text-white border border-slate-700 rounded-lg p-2 focus:ring-amber-500 focus:border-amber-500 outline-none flex-grow font-semibold"
-               value={viewingUserId}
-               onChange={(e) => setViewingUserId(e.target.value)}
-             >
-               {user && <option value={user.id}>🌟 My Bracket </option>}
-               <optgroup label="Pool Participants">
-                 {profiles.filter(p => p.id !== user?.id).map(p => (
-                   <option key={p.id} value={p.id}>{p.display_name || 'Unnamed Player'}</option>
-                 ))}
-               </optgroup>
-             </select>
-           </div>
-           
-           {isViewingOther && (
-             <div className={`mt-3 sm:mt-0 px-4 py-1.5 rounded-full text-xs font-bold shadow-lg ${adminEditMode ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'}`}>
-               {adminEditMode ? `🛠 Admin editing: ${activeProfile?.display_name}'s Bracket` : `🔒 READ ONLY: ${activeProfile?.display_name}'s Bracket`}
+          <div className="max-w-3xl w-full mb-6 flex flex-col sm:flex-row items-center justify-between bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+             <div className="flex items-center space-x-3 w-full sm:w-auto">
+               <label className="text-slate-400 font-bold text-sm uppercase tracking-wide">View Bracket:</label>
+               <select
+                 className="bg-slate-950 text-white border border-slate-700 rounded-lg p-2 focus:ring-amber-500 focus:border-amber-500 outline-none flex-grow"
+                 value={viewingUserId}
+                 onChange={(e) => setViewingUserId(e.target.value)}
+               >
+                 {user && <option value={user.id}>🌟 My Bracket </option>}
+                 <optgroup label="Pool Participants">
+                   {profiles.filter(p => p.id !== user?.id).map(p => (
+                     <option key={p.id} value={p.id}>{p.display_name || 'Unnamed Player'}</option>
+                   ))}
+                 </optgroup>
+               </select>
              </div>
-           )}
-        </div>
+             
+             {isViewingOther && (
+               <div className={`mt-3 sm:mt-0 px-4 py-1.5 rounded-full text-xs font-bold shadow-lg ${adminEditMode ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'}`}>
+                 {adminEditMode ? `🛠 Admin editing: ${activeProfile?.display_name}'s Bracket` : `🔒 READ ONLY: ${activeProfile?.display_name}'s Bracket`}
+               </div>
+             )}
+          </div>
 
-        {/* Save Bar & Admin Overrides */}
-        <div className="max-w-3xl mx-auto mb-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           {!isViewingOther && (
-            <div className="w-full sm:w-auto flex justify-center">
+            <div className="h-14 flex justify-center items-center">
               {!user ? (
                 <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-sm font-semibold flex items-center space-x-3">
                   <span>You must be logged in to save your bracket.</span>
                   <a href="/login" className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md transition-colors">Log In</a>
                 </div>
               ) : (
-                <div className="bg-slate-900 border border-slate-800 px-6 py-2.5 rounded-full flex items-center gap-3 shadow-lg">
-                  {isSaving ? (
-                    <span className="text-slate-400 font-bold text-xs animate-pulse">🔄 Silently saving picks...</span>
+                <div className="bg-slate-900 border border-slate-800 px-6 py-3 rounded-full flex flex-col sm:flex-row items-center gap-3 shadow-lg">
+                  {isGlobalKnockoutTimeLocked ? (
+                    <span className="text-amber-500 font-bold text-sm">🗓️ Official Lock Time Passed (Picks remain editable here)</span>
+                  ) : isSaving ? (
+                    <span className="text-slate-400 font-bold text-sm animate-pulse">🔄 Saving changes...</span>
                   ) : saveStatus === 'success' ? (
-                    <span className="text-emerald-400 font-bold text-xs">✓ All changes secured to database</span>
+                    <span className="text-emerald-400 font-bold text-sm">✓ All changes saved automatically</span>
                   ) : (
-                    <span className="text-slate-500 font-bold text-xs">✓ Cloud auto-save active</span>
+                    <span className="text-slate-500 font-bold text-sm">✓ Changes save automatically</span>
                   )}
                 </div>
               )}
@@ -573,40 +435,40 @@ export default function Home() {
           )}
 
           {currentUserIsAdmin && (
-            <div className="flex items-center gap-3 text-xs text-slate-300 mx-auto sm:mx-0">
-              <label className="inline-flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-full px-4 py-2 cursor-pointer hover:bg-slate-800 transition-colors">
+            <div className="mt-4 flex flex-col sm:flex-row items-center gap-3 text-sm text-slate-300">
+              <label className="inline-flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-full px-4 py-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={adminEditMode}
                   onChange={(e) => setAdminEditMode(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-slate-700 text-amber-500 focus:ring-amber-500"
+                  className="h-4 w-4 rounded border-slate-700 text-amber-500 focus:ring-amber-500"
                 />
-                <span className="font-bold text-amber-400/90">Admin edit override</span>
+                <span className="font-semibold">Admin edit mode</span>
               </label>
+              <span className="text-slate-400 text-xs">Enable editing of other players' brackets.</span>
             </div>
           )}
-        </div>
+        </header>
 
-        {/* --- DYNAMIC BRACKET STATUS BADGE --- */}
-        <div className="flex justify-center mb-6">
+        {/* --- STATUS LABEL --- */}
+        <div className="flex justify-center mb-4">
           {!isBracketFinalized ? (
-            <div className="px-6 py-2 rounded-full bg-amber-950/60 border border-amber-500/40 text-amber-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2.5 shadow-xl">
+            <div className="px-5 py-2 rounded-full bg-slate-900 border border-slate-700 text-slate-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2 shadow-lg">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
               </span>
-              Preliminary Bracket Projections Active
+              Preliminary Projections
             </div>
           ) : (
-            <div className="px-6 py-2 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2.5 shadow-xl">
+            <div className="px-5 py-2 rounded-full bg-emerald-950/50 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2 shadow-lg">
               <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
-              Official Finalized Knockout Bracket
+              Official Finalized Bracket
             </div>
           )}
         </div>
 
-        {/* Tournament Tree Grids */}
-        <div className="flex space-x-6 sm:space-x-8 overflow-x-auto pb-12 pt-2 px-2 sm:px-4 items-start min-h-[75vh] hide-scrollbar border-t border-slate-800/50">
+        <div className="flex space-x-6 sm:space-x-8 overflow-x-auto pb-12 pt-4 px-2 sm:px-4 items-start min-h-[75vh] hide-scrollbar border-t border-slate-800/50">
           {renderRound('R32', 'Round of 32')}
           {renderRound('R16', 'Round of 16')}
           {renderRound('QF', 'Quarterfinals')}
@@ -614,9 +476,11 @@ export default function Home() {
           {renderRound('F', 'Final Match')}
 
           <div className="flex flex-col min-w-[240px]">
-            <h3 className="text-center font-bold text-amber-500 uppercase tracking-widest text-xs mb-2 sticky top-0 bg-slate-950 py-2 z-10">Champion</h3>
-            <div className={`rounded-2xl text-center transition-all duration-500 mb-6 flex flex-col justify-center min-h-[110px] shadow-2xl ${champClass}`}>
-              {champContent}
+            <h3 className="text-center font-bold text-amber-500 uppercase tracking-widest text-xs mb-6 sticky top-0 bg-slate-950 py-2 z-10">Champion</h3>
+            <div className={`p-8 rounded-2xl text-center border shadow-2xl transition-all duration-500 mb-6 ${
+              champion ? 'bg-amber-500/10 border-amber-500/50 shadow-amber-500/10 scale-105' : 'bg-slate-900 border-slate-800 border-dashed'
+            }`}>
+              {champion ? <div className="text-2xl font-black text-amber-400 tracking-wide">{formatTeamName(champion)}</div> : <div className="text-slate-600 font-medium py-8">Awaiting Finalist</div>}
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center shadow-lg">
@@ -630,7 +494,7 @@ export default function Home() {
                    setHasUnsavedChanges(true);
                  }}
                  disabled={inputIsDisabled}
-                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-center text-white focus:border-amber-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-center text-white focus:border-amber-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                />
                <p className="text-[10px] text-slate-500 mt-2">Predict the exact score at the end of regulation/extra time.</p>
             </div>
