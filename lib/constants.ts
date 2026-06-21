@@ -100,6 +100,13 @@ export const THIRD_PLACE_SLOTS = [
 ];
 
 export function assignThirdPlaceTeams(advancingThirds: {team: string, group: string}[]) {
+  // CRITICAL FIX: FIFA's matrix assigns slots based on Alphabetical Group order, not Leaderboard Points!
+  const sortedThirds = [...advancingThirds].sort((a, b) => {
+    const groupA = a.group.replace('GROUP_', '');
+    const groupB = b.group.replace('GROUP_', '');
+    return groupA.localeCompare(groupB);
+  });
+  
   const result: Record<number, string> = {};
   const usedTeams = new Set<string>();
 
@@ -108,8 +115,12 @@ export function assignThirdPlaceTeams(advancingThirds: {team: string, group: str
 
     const currentSlot = THIRD_PLACE_SLOTS[slotIndex];
 
-    for (const team of advancingThirds) {
-      if (!usedTeams.has(team.team) && currentSlot.allowedGroups.includes(team.group)) {
+    // We now iterate through the Alphabetized list, exactly as FIFA's matrix does
+    for (const team of sortedThirds) {
+      // Ensure we are comparing the raw letter (e.g., 'A' instead of 'GROUP_A')
+      const teamGroupLetter = team.group.replace('GROUP_', '');
+      
+      if (!usedTeams.has(team.team) && currentSlot.allowedGroups.includes(teamGroupLetter)) {
         
         // Try assigning this team to this slot
         result[currentSlot.matchId] = team.team;
