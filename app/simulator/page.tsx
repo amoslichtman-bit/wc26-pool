@@ -52,7 +52,7 @@ export default function Simulator() {
   const [projectedLeaderboard, setProjectedLeaderboard] = useState<any[]>([]);
 
   useEffect(() => {
-    const initializeSimulator = async () => {
+const initializeSimulator = async () => {
       let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_MATCHES));
       
       const API_MAP: Record<string, string> = { 
@@ -64,8 +64,9 @@ export default function Simulator() {
         "Curaçao": "Curacao" 
       };
 
+      const groupRanks: Record<string, string[]> = {};
+
       try {
-        // 1. Fetch all required data concurrently
         const [standingsRes, matchesRes, { data: profiles }, { data: p1Picks }, { data: p2Picks }] = await Promise.all([
           fetch('/api/standings', { cache: 'no-store' }),
           fetch('/api/matches', { cache: 'no-store' }),
@@ -76,7 +77,6 @@ export default function Simulator() {
 
         if (p2Picks) setAllPhase2Picks(p2Picks);
 
-        // 2. Pre-fill Group Stage Baseline Scores
         let currentStandings: Record<string, { rank: number }> = {};
         let advancingThirdPlace: string[] = [];
 
@@ -87,6 +87,11 @@ export default function Simulator() {
           
           groupStandings.forEach((group: any) => {
             const groupLetter = group.group.replace('GROUP_', '');
+            
+            // Build groupRanks mapping for the anchor logic
+            const sorted = group.table.sort((a: any, b: any) => (b.points - a.points) || (b.goalDifference - a.goalDifference) || (b.goalsFor - a.goalsFor));
+            groupRanks[groupLetter] = sorted.map((t: any) => API_MAP[t.team.name] || t.team.name);
+
             group.table.forEach((row: any, index: number) => {
               const teamName = API_MAP[row.team.name] || row.team.name;
               currentStandings[teamName] = { rank: index + 1 };
@@ -97,20 +102,31 @@ export default function Simulator() {
           thirds.sort((a,b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf));
           advancingThirdPlace = thirds.slice(0, 8).map(t => t.team);
 
-          // Sub in the initial matchups (just like phase2 does)
           dynamicMatches = dynamicMatches.map((m: any) => {
-             // Basic replacement logic for 1st/2nd/3Q
-             let newA = m.teamA; let newB = m.teamB;
-             Object.keys(currentStandings).forEach(team => {
-                 const rankStr = currentStandings[team].rank === 1 ? '1st Place' : '2nd Place';
-                 if (newA.includes(rankStr) && newA.includes('Group')) { /* mapping logic */ }
-             });
-             // For the simulator, it's safer to just let the API match data overwrite this immediately if Knockouts have started.
-             return m;
+            let newA = m.teamA; let newB = m.teamB;
+            const match1stA = newA.match(/1st Place Group ([A-L])/);
+            if(match1stA && groupRanks[match1stA[1]]) newA = groupRanks[match1stA[1]][0] || newA;
+            const match2ndA = newA.match(/2nd Place Group ([A-L])/);
+            if(match2ndA && groupRanks[match2ndA[1]]) newA = groupRanks[match2ndA[1]][1] || newA;
+            const match1stB = newB.match(/1st Place Group ([A-L])/);
+            if(match1stB && groupRanks[match1stB[1]]) newB = groupRanks[match1stB[1]][0] || newB;
+            const match2ndB = newB.match(/2nd Place Group ([A-L])/);
+            if(match2ndB && groupRanks[match2ndB[1]]) newB = groupRanks[match2ndB[1]][1] || newB;
+
+            if (newA.includes('3Q Groups')) {
+              const groups = newA.replace('3Q Groups ', '').split('/');
+              const availableThird = thirds.find((t: any) => groups.includes(t.group));
+              if (availableThird) newA = availableThird.team;
+            }
+            if (newB.includes('3Q Groups')) {
+              const groups = newB.replace('3Q Groups ', '').split('/');
+              const availableThird = thirds.find((t: any) => groups.includes(t.group));
+              if (availableThird) newB = availableThird.team;
+            }
+            return { ...m, teamA: newA, teamB: newB };
           });
         }
 
-        // Calculate exact Group Stage baseline points
         const initialScores = (profiles || []).map(profile => {
           let p1Points = 0;
           const userP1 = p1Picks?.filter(p => p.user_id === profile.id) || [];
@@ -127,20 +143,37 @@ export default function Simulator() {
         });
         setBaseScores(initialScores);
 
-        // 3. Process the Actual Bracket & Scores
+        // STEP 2: Anchor Overwrite for Simulator
         if (matchesRes.ok) {
           const mData = await matchesRes.json();
           if (mData.matches && mData.matches.length > 0) {
             
-            // Map actual team names into R32
             const r32Matches = mData.matches.filter((m: any) => m.stage === 'LAST_32');
+            
+            const R32_ANCHORS: Record<number, string> = {
+              1: groupRanks['A']?.[0], 2: groupRanks['B']?.[1], 3: groupRanks['D']?.[0], 4: groupRanks['E']?.[1],
+              5: groupRanks['G']?.[0], 6: groupRanks['H']?.[1], 7: groupRanks['J']?.[0], 8: groupRanks['K']?.[1],
+              9: groupRanks['B']?.[0], 10: groupRanks['C']?.[0], 11: groupRanks['E']?.[0], 12: groupRanks['F']?.[0],
+              13: groupRanks['H']?.[0], 14: groupRanks['I']?.[0], 15: groupRanks['K']?.[0], 16: groupRanks['L']?.[0],
+            };
+
             dynamicMatches = dynamicMatches.map((m: any) => {
-              if (m.round === 'R32' && r32Matches[m.id - 1]) {
-                const apiMatch = r32Matches[m.id - 1];
-                const tA = apiMatch.homeTeam?.name;
-                const tB = apiMatch.awayTeam?.name;
-                if (tA) m.teamA = API_MAP[tA] || tA;
-                if (tB) m.teamB = API_MAP[tB] || tB;
+              if (m.round === 'R32') {
+                const anchorTeam = R32_ANCHORS[m.id];
+                if (anchorTeam) {
+                  const matchingApiGame = r32Matches.find((apiM: any) => {
+                    const tHome = API_MAP[apiM.homeTeam?.name] || apiM.homeTeam?.name;
+                    const tAway = API_MAP[apiM.awayTeam?.name] || apiM.awayTeam?.name;
+                    return tHome === anchorTeam || tAway === anchorTeam;
+                  });
+
+                  if (matchingApiGame) {
+                    const rawHome = matchingApiGame.homeTeam?.name;
+                    const rawAway = matchingApiGame.awayTeam?.name;
+                    if (rawHome) m.teamA = API_MAP[rawHome] || rawHome;
+                    if (rawAway) m.teamB = API_MAP[rawAway] || rawAway;
+                  }
+                }
               }
               return m;
             });
@@ -152,7 +185,6 @@ export default function Simulator() {
                 apiStageMatches.forEach((apiM, index) => {
                     const matchToUpdate = roundMatches[index];
                     if (matchToUpdate) {
-                        // Ensure teams map correctly even in later rounds
                         const tA = apiM.homeTeam?.name; const tB = apiM.awayTeam?.name;
                         if (tA) matchToUpdate.teamA = API_MAP[tA] || tA;
                         if (tB) matchToUpdate.teamB = API_MAP[tB] || tB;
@@ -173,7 +205,6 @@ export default function Simulator() {
                                 matchToUpdate.winner = formattedWinner;
                                 matchToUpdate.actualWinner = formattedWinner;
 
-                                // Push winner to next round automatically
                                 if (matchToUpdate.nextMatchId) {
                                     const nextM = dynamicMatches.find((m: any) => m.id === matchToUpdate.nextMatchId);
                                     if (nextM) {
