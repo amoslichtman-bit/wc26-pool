@@ -79,6 +79,19 @@ export default function NavBar() {
               {link.name}
             </Link>
           ))}
+          
+          {/* Custom Sky Blue Simulator Link */}
+          <Link 
+            href="/simulator"
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+              pathname === '/simulator' 
+                ? 'bg-sky-500/20 text-sky-400' 
+                : 'text-sky-500/80 hover:text-sky-400 hover:bg-slate-900'
+            }`}
+          >
+            Simulator
+          </Link>
+
           {isAdmin && (
             <Link 
               href="/admin"
@@ -149,6 +162,20 @@ export default function NavBar() {
               {link.name}
             </Link>
           ))}
+          
+          {/* Custom Sky Blue Simulator Link (Mobile) */}
+          <Link 
+            href="/simulator"
+            onClick={() => setIsMenuOpen(false)}
+            className={`block px-4 py-3 rounded-lg text-sm font-bold transition-colors ${
+              pathname === '/simulator' 
+                ? 'bg-sky-500/20 text-sky-400' 
+                : 'text-sky-500/80 hover:text-sky-400 hover:bg-slate-800/50'
+            }`}
+          >
+            Simulator
+          </Link>
+
           {isAdmin && (
             <Link 
               href="/admin"
