@@ -385,10 +385,10 @@ const handlePick = (matchId: number, selectedTeam: string) => {
         <header className="mb-10 flex flex-col items-center text-center">          
           <h1 className="text-4xl font-black text-sky-500 mb-2 tracking-tight">Knockout Simulator</h1>
           <p className="text-slate-400 max-w-2xl text-sm mb-6">
-            Click pending match-ups to project winners and instantly see how the leaderboard shifts. Completed matches are permanently locked in.
+            Click pending match-ups to project winners and instantly see how the leaderboard shifts (at bottom of page). 
           </p>
           <div className="flex gap-4 text-xs font-bold uppercase tracking-widest">
-            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500/50 border border-emerald-500"></span> Official Winner</div>
+            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500/50 border border-emerald-500"></span> Actual Winner</div>
             <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-sky-500/30 border border-sky-500"></span> Projected Winner</div>
           </div>
         </header>
