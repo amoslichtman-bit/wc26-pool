@@ -3,23 +3,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation'; 
-
+import { API_TO_COMMON_MAP, TOURNAMENT_GROUPS } from '../../lib/constants';
 export const dynamic = 'force-dynamic';
-
-const TOURNAMENT_GROUPS = [
-  { name: 'Group A', teams: ['Czechia', 'Mexico', 'South Africa', 'South Korea'] },
-  { name: 'Group B', teams: ['Bosnia & Herzigovina', 'Canada', 'Switzerland', 'Qatar'] },
-  { name: 'Group C', teams: ['Brazil', 'Haiti', 'Morocco', 'Scotland'] },
-  { name: 'Group D', teams: ['Australia', 'Paraguay', 'Turkey', 'United States'] },
-  { name: 'Group E', teams: ['Curacao', 'Ecuador', 'Germany', 'Ivory Coast'] },
-  { name: 'Group F', teams: ['Japan', 'Netherlands', 'Sweden', 'Tunisia'] },
-  { name: 'Group G', teams: ['Belgium', 'Egypt', 'Iran', 'New Zealand'] },
-  { name: 'Group H', teams: ['Cape Verde', 'Saudi Arabia', 'Spain', 'Uruguay'] },
-  { name: 'Group I', teams: ['France', 'Iraq', 'Norway', 'Senegal'] },
-  { name: 'Group J', teams: ['Algeria', 'Argentina', 'Austria', 'Jordan'] },
-  { name: 'Group K', teams: ['Colombia', 'DR Congo', 'Portugal', 'Uzbekistan'] },
-  { name: 'Group L', teams: ['Croatia', 'England', 'Ghana', 'Panama'] },
-];
 
 export default function Phase1Picks() {
   const router = useRouter();
@@ -125,13 +110,8 @@ export default function Phase1Picks() {
             groupStandings.forEach((group: any) => {
               group.table.forEach((teamRow: any) => {
                 const apiName = teamRow.team.name;
-                const API_TO_SHEET_MAP: Record<string, string> = {
-                  "United States": "United States", "USA": "United States",
-                  "Bosnia and Herzegovina": "Bosnia & Herzigovina", "Bosnia-Herzegovina": "Bosnia & Herzigovina",
-                  "Czech Republic": "Czechia", "Korea Republic": "South Korea", "Congo DR": "DR Congo",
-                  "Côte d'Ivoire": "Ivory Coast", "Cabo Verde": "Cape Verde", "Cape Verde Islands": "Cape Verde", "Curaçao": "Curacao" 
-                };
-                const translatedName = API_TO_SHEET_MAP[apiName] || apiName;
+
+                const translatedName = API_TO_COMMON_MAP[apiName] || apiName;
                 standingsMap[translatedName] = { 
                     w: teamRow.won, 
                     d: teamRow.draw, 
