@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import NavBar from '../components/NavBar';
+import { Analytics } from "@vercel/analytics/next"
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: 'World Cup 2026 Pool',
@@ -19,6 +20,7 @@ export default function RootLayout({
         <div className="flex-grow">
           {children}
         </div>
+        <Analytics />
       </body>
     </html>
   );
