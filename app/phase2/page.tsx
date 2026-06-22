@@ -97,7 +97,8 @@ export default function Home() {
 
           // Run the chronological constraint solver matrix on the top 8 advancing 3rds
           const perfectAssignments = assignThirdPlaceTeams(top8Thirds);
-
+          console.log("🏆 TOP 8 ADVANCING THIRDS:", JSON.stringify(top8Thirds));
+          console.log("🔀 MATRIX SOLVER ASSIGNMENTS:", JSON.stringify(perfectAssignments));
           dynamicMatches = dynamicMatches.map((m: any) => {
             let newA = m.teamA;
             let newB = m.teamB;
