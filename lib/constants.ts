@@ -89,60 +89,74 @@ export function sortStandingsTable(a: any, b: any) {
 
 // The 8 official knockout slots that require a 3rd place team, and their allowed groups
 export const THIRD_PLACE_SLOTS = [
-  { matchId: 1, allowedGroups: ['A', 'B', 'C', 'D', 'F'] },
-  { matchId: 2, allowedGroups: ['C', 'D', 'F', 'G', 'H'] },
-  { matchId: 7, allowedGroups: ['C', 'E', 'F', 'H', 'I'] },
-  { matchId: 8, allowedGroups: ['E', 'H', 'I', 'J', 'K'] },
-  { matchId: 11, allowedGroups: ['B', 'E', 'F', 'I', 'J'] },
-  { matchId: 12, allowedGroups: ['A', 'E', 'H', 'I', 'J'] },
-  { matchId: 15, allowedGroups: ['E', 'F', 'G', 'I', 'J'] },
-  { matchId: 16, allowedGroups: ['D', 'E', 'I', 'J', 'L'] }
+  { matchId: 1, allowedGroups: ['A', 'B', 'C', 'D', 'F'] }, // Match 74 (1E)
+  { matchId: 2, allowedGroups: ['C', 'D', 'F', 'G', 'H'] }, // Match 77 (1I)
+  { matchId: 7, allowedGroups: ['C', 'E', 'F', 'H', 'I'] }, // Match 79 (1A)
+  { matchId: 8, allowedGroups: ['E', 'H', 'I', 'J', 'K'] }, // Match 80 (1L)
+  { matchId: 11, allowedGroups: ['B', 'E', 'F', 'I', 'J'] }, // Match 81 (1D - USA)
+  { matchId: 12, allowedGroups: ['A', 'E', 'H', 'I', 'J'] }, // Match 82 (1G)
+  { matchId: 15, allowedGroups: ['E', 'F', 'G', 'I', 'J'] }, // Match 85 (1B)
+  { matchId: 16, allowedGroups: ['D', 'E', 'I', 'J', 'L'] }  // Match 87 (1K)
 ];
 
+// Official FIFA "Annex C" manual overrides for specific advancing group combinations
+const FIFA_MATRIX_OVERRIDES: Record<string, Record<number, string>> = {
+  // Scenario: Groups A, E, H, J are eliminated. (This is your exact current Chalk Projection!)
+  // FIFA manually forces Match 74 to take C, saving B for Match 81 (USA).
+  "B,C,D,F,G,I,K,L": { 1: "C", 2: "D", 7: "F", 8: "K", 11: "B", 12: "I", 15: "G", 16: "L" },
+};
+
 export function assignThirdPlaceTeams(advancingThirds: {team: string, group: string}[]) {
-  // CRITICAL FIX: FIFA's matrix assigns slots based on Alphabetical Group order, not Leaderboard Points!
+  // 1. Sort the 8 advancing groups alphabetically (e.g., "B,C,D,F,G,I,K,L")
   const sortedThirds = [...advancingThirds].sort((a, b) => {
     const groupA = a.group.replace('GROUP_', '');
     const groupB = b.group.replace('GROUP_', '');
     return groupA.localeCompare(groupB);
   });
   
+  const combinationKey = sortedThirds.map(t => t.group.replace('GROUP_', '')).join(',');
+
+  // 2. Check if FIFA has a hardcoded Annex C override for this exact scenario
+  if (FIFA_MATRIX_OVERRIDES[combinationKey]) {
+    const override = FIFA_MATRIX_OVERRIDES[combinationKey];
+    const result: Record<number, string> = {};
+    
+    // Map the letters back to the actual team names
+    for (const [matchId, groupLetter] of Object.entries(override)) {
+      const teamObj = sortedThirds.find(t => t.group.replace('GROUP_', '') === groupLetter);
+      if (teamObj) result[Number(matchId)] = teamObj.team;
+    }
+    return result;
+  }
+  
+  // 3. Fallback: Run the standard alphabetical backtracking solver
   const result: Record<number, string> = {};
   const usedTeams = new Set<string>();
 
   function backtrack(slotIndex: number): boolean {
-    if (slotIndex === THIRD_PLACE_SLOTS.length) return true; // All slots filled successfully!
+    if (slotIndex === THIRD_PLACE_SLOTS.length) return true;
 
     const currentSlot = THIRD_PLACE_SLOTS[slotIndex];
 
-    // We now iterate through the Alphabetized list, exactly as FIFA's matrix does
     for (const team of sortedThirds) {
-      // Ensure we are comparing the raw letter (e.g., 'A' instead of 'GROUP_A')
       const teamGroupLetter = team.group.replace('GROUP_', '');
       
       if (!usedTeams.has(team.team) && currentSlot.allowedGroups.includes(teamGroupLetter)) {
-        
-        // Try assigning this team to this slot
         result[currentSlot.matchId] = team.team;
         usedTeams.add(team.team);
 
-        // Move to the next slot
         if (backtrack(slotIndex + 1)) return true;
 
-        // If it failed downstream, undo this choice and try the next team
         delete result[currentSlot.matchId];
         usedTeams.delete(team.team);
       }
     }
-    return false; // No valid team found, trigger backtracking
+    return false;
   }
 
   const success = backtrack(0);
   return success ? result : null;
-
 }
-
-// Add to the bottom of lib/constants.ts
 
 // Global Power Rankings (1 = Strongest, 48 = Weakest) used to project unplayed matches
 export const PRE_TOURNAMENT_RANKS: Record<string, number> = {
