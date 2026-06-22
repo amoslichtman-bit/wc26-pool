@@ -139,4 +139,21 @@ export function assignThirdPlaceTeams(advancingThirds: {team: string, group: str
 
   const success = backtrack(0);
   return success ? result : null;
+
 }
+
+// Add to the bottom of lib/constants.ts
+
+// Global Power Rankings (1 = Strongest, 48 = Weakest) used to project unplayed matches
+export const PRE_TOURNAMENT_RANKS: Record<string, number> = {
+  "Argentina": 1, "France": 2, "Spain": 3, "England": 4, "Brazil": 5, 
+  "Belgium": 6, "Netherlands": 7, "Portugal": 8, "Germany": 9, "Colombia": 10, 
+  "Uruguay": 11, "United States": 12, "Mexico": 13, "Switzerland": 14, "Japan": 15, 
+  "Senegal": 16, "Iran": 17, "South Korea": 18, "Australia": 19, "Austria": 20, 
+  "Turkey": 21, "Sweden": 22, "Ecuador": 23, "Czechia": 24, "Poland": 25,
+  "Scotland": 26, "Egypt": 27, "Ivory Coast": 28, "Qatar": 29, "Canada": 30, 
+  "Tunisia": 31, "Algeria": 32, "Norway": 33, "Paraguay": 34, "Saudi Arabia": 35, 
+  "Nigeria": 36, "Panama": 37, "Mali": 38, "Uzbekistan": 39, "Bosnia & Herzigovina": 40, 
+  "Ghana": 41, "South Africa": 42, "Cape Verde": 43, "DR Congo": 44, "Iraq": 45, 
+  "Jordan": 46, "Curacao": 47, "New Zealand": 48
+};

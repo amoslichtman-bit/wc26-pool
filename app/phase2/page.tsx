@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
 import { API_TO_COMMON_MAP as API_MAP, INITIAL_KNOCKOUT_MATCHES, assignThirdPlaceTeams } from '../../lib/constants';
+
 export const dynamic = 'force-dynamic';
 
 // GLOBAL DEADLINES
@@ -14,8 +15,9 @@ export default function Home() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   
-  // User's Interactive Bracket
-const [matches, setMatches] = useState<any[]>(INITIAL_KNOCKOUT_MATCHES);  const [baseBracket, setBaseBracket] = useState<any[]>([]); 
+  // User's Interactive Bracket State initialized with the corrected structure
+  const [matches, setMatches] = useState<any[]>(INITIAL_KNOCKOUT_MATCHES);   
+  const [baseBracket, setBaseBracket] = useState<any[]>([]); 
   const [champion, setChampion] = useState<string | null>(null);
   const [tiebreakerScore, setTiebreakerScore] = useState<string>('');
   
@@ -67,8 +69,7 @@ const [matches, setMatches] = useState<any[]>(INITIAL_KNOCKOUT_MATCHES);  const 
       const { data: allPicksData } = await supabase.from('phase_2_picks').select('*').limit(10000);
       if (allPicksData) setAllPhase2Picks(allPicksData);
 
-let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
-
+      let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
       const groupRanks: Record<string, string[]> = {};
 
       try {
@@ -78,58 +79,49 @@ let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
           const sData = await standingsRes.json();
           const thirds: any[] = [];
           
-          const groupStandings = sData.standings?.filter((s: any) => s.type === 'TOTAL') || [];
+          // CRITICAL: We grab projectedStandings so our preliminary bracket simulates realistic full 3-game group outcomes!
+          const groupStandings = sData.projectedStandings || sData.standings || [];
+          
           groupStandings.forEach((group: any) => {
             const groupLetter = group.group.replace('GROUP_', '');
             const sorted = group.table.sort((a: any, b: any) => (b.points - a.points) || (b.goalDifference - a.goalDifference) || (b.goalsFor - a.goalsFor));
             
             groupRanks[groupLetter] = sorted.map((t: any) => API_MAP[t.team.name] || t.team.name);
-            if(sorted[2]) {
+            if (sorted[2]) {
               thirds.push({ team: groupRanks[groupLetter][2], group: groupLetter, pts: sorted[2].points, gd: sorted[2].goalDifference, gf: sorted[2].goalsFor });
             }
           });
 
-          thirds.sort((a,b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf));
-          const top8Thirds = thirds.slice(0, 8);
+          thirds.sort((a, b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf));
+          const top8Thirds = thirds.slice(0, 8).map(t => ({ team: t.team, group: t.group }));
+
+          // Run the chronological constraint solver matrix on the top 8 advancing 3rds
+          const perfectAssignments = assignThirdPlaceTeams(top8Thirds);
 
           dynamicMatches = dynamicMatches.map((m: any) => {
             let newA = m.teamA;
             let newB = m.teamB;
             
             const match1stA = newA.match(/1st Place Group ([A-L])/);
-            if(match1stA && groupRanks[match1stA[1]]) newA = groupRanks[match1stA[1]][0] || newA;
+            if (match1stA && groupRanks[match1stA[1]]) newA = groupRanks[match1stA[1]][0] || newA;
             
             const match2ndA = newA.match(/2nd Place Group ([A-L])/);
-            if(match2ndA && groupRanks[match2ndA[1]]) newA = groupRanks[match2ndA[1]][1] || newA;
+            if (match2ndA && groupRanks[match2ndA[1]]) newA = groupRanks[match2ndA[1]][1] || newA;
 
             const match1stB = newB.match(/1st Place Group ([A-L])/);
-            if(match1stB && groupRanks[match1stB[1]]) newB = groupRanks[match1stB[1]][0] || newB;
+            if (match1stB && groupRanks[match1stB[1]]) newB = groupRanks[match1stB[1]][0] || newB;
             
             const match2ndB = newB.match(/2nd Place Group ([A-L])/);
-            if(match2ndB && groupRanks[match2ndB[1]]) newB = groupRanks[match2ndB[1]][1] || newB;
+            if (match2ndB && groupRanks[match2ndB[1]]) newB = groupRanks[match2ndB[1]][1] || newB;
 
-// We'll let the solver handle the 3Q teams in a moment
-          return { ...m, teamA: newA, teamB: newB };
-        });
-
-        // RUN THE SOLVER ON THE 3RD PLACE TEAMS
-        const perfectAssignments = assignThirdPlaceTeams(top8Thirds);
-
-        if (perfectAssignments) {
-          dynamicMatches = dynamicMatches.map((m: any) => {
-            // If a match is supposed to have a 3Q team, swap in the globally solved team
-            if (m.teamB.includes('3Q Groups')) {
-              m.teamB = perfectAssignments[m.id] || m.teamB;
+            // Map resolved 3rd place teams safely using the dictionary returned by the backend solver
+            if (perfectAssignments) {
+              if (newA.includes('3Q Groups')) newA = perfectAssignments[m.id] || newA;
+              if (newB.includes('3Q Groups')) newB = perfectAssignments[m.id] || newB;
             }
-            // (Just in case FIFA ever moves a 3Q to the home slot)
-            if (m.teamA.includes('3Q Groups')) {
-              m.teamA = perfectAssignments[m.id] || m.teamA;
-            }
-            return m;
+
+            return { ...m, teamA: newA, teamB: newB };
           });
-        } else {
-          console.warn("Matrix Solver failed: Invalid 3rd-place group combination found based on live standings.");
-        }
         }
 
         // STEP 2: Anchor Overwrite - Use undisputed 1st/2nd place facts to pull true official API matchups
@@ -140,12 +132,12 @@ let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
             
             const r32Matches = data.matches.filter((m: any) => m.stage === 'LAST_32');
             
-            // Map the undisputed 1st/2nd place anchor teams to their specific Bracket Slot IDs
+            // Map the undisputed positions to their specific updated index structures matching Wikipedia
             const R32_ANCHORS: Record<number, string> = {
-              1: groupRanks['A']?.[0], 2: groupRanks['B']?.[1], 3: groupRanks['D']?.[0], 4: groupRanks['E']?.[1],
-              5: groupRanks['G']?.[0], 6: groupRanks['H']?.[1], 7: groupRanks['J']?.[0], 8: groupRanks['K']?.[1],
-              9: groupRanks['B']?.[0], 10: groupRanks['C']?.[0], 11: groupRanks['E']?.[0], 12: groupRanks['F']?.[0],
-              13: groupRanks['H']?.[0], 14: groupRanks['I']?.[0], 15: groupRanks['K']?.[0], 16: groupRanks['L']?.[0],
+              1: groupRanks['E']?.[0], 2: groupRanks['I']?.[0], 3: groupRanks['A']?.[1], 4: groupRanks['F']?.[0],
+              5: groupRanks['C']?.[0], 6: groupRanks['E']?.[1], 7: groupRanks['A']?.[0], 8: groupRanks['L']?.[0],
+              9: groupRanks['K']?.[1], 10: groupRanks['H']?.[0], 11: groupRanks['D']?.[0], 12: groupRanks['G']?.[0],
+              13: groupRanks['J']?.[0], 14: groupRanks['D']?.[1], 15: groupRanks['B']?.[0], 16: groupRanks['K']?.[0],
             };
 
             dynamicMatches = dynamicMatches.map((m: any) => {
@@ -220,7 +212,7 @@ let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
             setActualChampion(realChamp);
           }
         }
-      } catch(e) { 
+      } catch (e) { 
         console.warn("API load failed", e); 
       }
 
@@ -493,9 +485,17 @@ let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
           </span>
           <div className="h-px bg-amber-500/20 w-full my-0.5"></div>
           {!isBracketFinalized ? (
-            <span className="text-amber-200/90 font-medium">
-              🚨 <strong className="text-white uppercase tracking-wider font-bold">Preliminary Status:</strong> Matchups currently displayed are best-guess projections based on live group standings. The bracket will permanently lock in actual teams from the API when the Group Stage concludes.
-            </span>
+            <div className="flex flex-col gap-2">
+              <span className="text-amber-200/90 font-medium">
+                🚨 <strong className="text-white uppercase tracking-wider font-bold">Preliminary Status:</strong> Matchups currently displayed are best-guess baseline projections. Because FIFA's new 12-group matrix has 495 possible tiebreaker combinations, our live mid-game projections may temporarily differ from major sports networks. 
+              </span>
+              <span className="text-amber-200/90 font-medium text-sm">
+                This bracket will permanently auto-correct and lock in the official matchups the moment the Group Stage concludes.
+                <a href="https://www.bbc.co.uk/sport/football/world-cup/schedule" target="_blank" rel="noopener noreferrer" className="inline-flex items-center ml-2 text-sky-400 hover:text-sky-300 underline font-bold transition-colors">
+                  Compare with BBC's live tracker ↗
+                </a>
+              </span>
+            </div>
           ) : (
             <span className="text-emerald-400 font-bold">
               ✅ <strong className="text-white uppercase tracking-wider font-bold">Official Matchups Active:</strong> Group stage complete. The bracket is now fully populated with official matchups.
