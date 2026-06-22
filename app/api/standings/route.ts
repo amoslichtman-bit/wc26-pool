@@ -65,10 +65,11 @@ export async function GET() {
         if (isFinished) {
           actualGroups[groupName][homeTeam].playedGames += 1;
           actualGroups[groupName][awayTeam].playedGames += 1;
-        if (homeScore > awayScore) { projGroups[groupName][homeTeam].won += 1; projGroups[groupName][homeTeam].points += 3; projGroups[groupName][awayTeam].lost += 1; }
-        else if (homeScore < awayScore) { projGroups[groupName][awayTeam].won += 1; projGroups[groupName][awayTeam].points += 3; projGroups[groupName][homeTeam].lost += 1; }
-        else { projGroups[groupName][homeTeam].draw += 1; projGroups[groupName][awayTeam].draw += 1; projGroups[groupName][homeTeam].points += 1; projGroups[groupName][awayTeam].points += 1; }
-       }
+          // FIXED: Changed projGroups to actualGroups here
+          if (homeScore > awayScore) { actualGroups[groupName][homeTeam].won += 1; actualGroups[groupName][homeTeam].points += 3; actualGroups[groupName][awayTeam].lost += 1; }
+          else if (homeScore < awayScore) { actualGroups[groupName][awayTeam].won += 1; actualGroups[groupName][awayTeam].points += 3; actualGroups[groupName][homeTeam].lost += 1; }
+          else { actualGroups[groupName][homeTeam].draw += 1; actualGroups[groupName][awayTeam].draw += 1; actualGroups[groupName][homeTeam].points += 1; actualGroups[groupName][awayTeam].points += 1; }
+        }
       }
 
       // --- 2. HANDLE CHALK PROJECTED TABLE (Real completed games + Chalk simulated future games) ---
