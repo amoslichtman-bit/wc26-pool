@@ -73,7 +73,7 @@ export default function Home() {
       const groupRanks: Record<string, string[]> = {};
 
       try {
-        // STEP 1: Predict Preliminary Knockout Teams based on live group standings
+        // STEP 1: Predict Preliminary Knockout Teams based on PROJECTIONS
         const standingsRes = await fetch('/api/standings', { cache: 'no-store' });
         if (standingsRes.ok) {
           const sData = await standingsRes.json();
@@ -373,7 +373,6 @@ export default function Home() {
             if (isSelected) {
               if (isMatchFinished) {
                   if (actualMatch.winner === teamName) {
-                      // Correct Pick (Green)
                       btnClass = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50';
                       content = (
                           <div className="flex flex-col text-left truncate">
@@ -382,7 +381,6 @@ export default function Home() {
                           </div>
                       );
                   } else {
-                      // Incorrect Pick (Red Strikethrough + Actual Winner below)
                       btnClass = 'bg-red-500/10 text-red-400 border border-red-500/30';
                       content = (
                           <div className="flex flex-col text-left truncate">
@@ -392,7 +390,6 @@ export default function Home() {
                       );
                   }
               } else if (eliminatedTeams.has(teamName)) {
-                  // Pending match, but team is mathematically busted
                   btnClass = 'bg-red-500/10 text-red-400 border border-red-500/30';
                   content = (
                       <div className="flex flex-col text-left truncate">
@@ -401,7 +398,6 @@ export default function Home() {
                       </div>
                   );
               } else {
-                  // Selected and alive (Sky Blue)
                   btnClass = 'bg-sky-500/20 text-sky-400 border border-sky-500/50 shadow-[0_0_10px_rgba(14,165,233,0.1)]';
                   content = <span className="truncate pr-2 font-bold">{formatTeamName(teamName)}</span>;
               }
@@ -434,7 +430,6 @@ export default function Home() {
 
   const activeProfile = profiles.find(p => p.id === viewingUserId);
 
-  // Champion Box March Madness Visuals
   let champClass = 'bg-slate-900 border-slate-800 border-dashed';
   let champContent = <div className="text-slate-600 font-medium py-8">Awaiting Finalist</div>;
 
@@ -484,23 +479,17 @@ export default function Home() {
             This bracket is meant as a companion tool and does not replace your official Google Sheets duties. Picks remain open here, but your official picks must be locked in the spreadsheet before the knockout stage begins.
           </span>
           <div className="h-px bg-amber-500/20 w-full my-0.5"></div>
+          
           {!isBracketFinalized ? (
-            <div className="flex flex-col gap-2">
-              <span className="text-amber-200/90 font-medium">
-                🚨 <strong className="text-white uppercase tracking-wider font-bold">Preliminary Status:</strong> Matchups currently displayed are best-guess baseline projections. Because FIFA's new 12-group matrix has 495 possible tiebreaker combinations, our live mid-game projections may temporarily differ from major sports networks. 
-              </span>
-              <span className="text-amber-200/90 font-medium text-sm">
-                This bracket will permanently auto-correct and lock in the official matchups the moment the Group Stage concludes.
-                <a href="https://www.bbc.co.uk/sport/football/world-cup/schedule" target="_blank" rel="noopener noreferrer" className="inline-flex items-center ml-2 text-sky-400 hover:text-sky-300 underline font-bold transition-colors">
-                  Compare with BBC's live tracker ↗
-                </a>
-              </span>
-            </div>
+            <span className="text-amber-200/90 font-medium">
+              🚨 <strong className="text-white uppercase tracking-wider font-bold">Preliminary Status:</strong> Matchups currently displayed are best-guess projections based on projected group standings. The bracket will permanently lock in actual teams from the API when the Group Stage concludes.
+            </span>
           ) : (
             <span className="text-emerald-400 font-bold">
               ✅ <strong className="text-white uppercase tracking-wider font-bold">Official Matchups Active:</strong> Group stage complete. The bracket is now fully populated with official matchups.
             </span>
           )}
+          
           <span className="text-xs font-mono bg-amber-500/20 text-amber-200 px-3 py-1 rounded-md border border-amber-500/30 mt-1">
             Official Finalized Bracket Window: June 28 at 12:10 AM ET — June 28 at 3:00 PM ET
           </span>
