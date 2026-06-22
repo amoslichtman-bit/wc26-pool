@@ -12,8 +12,6 @@ export default function Login() {
   
   const [unclaimedProfiles, setUnclaimedProfiles] = useState<any[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState('');
-  
-  // State to hold the display name for brand new users
   const [newDisplayName, setNewDisplayName] = useState('');
 
   // Fetch unclaimed placeholders when switching to sign-up mode
@@ -45,7 +43,6 @@ export default function Login() {
         metadata.claim_profile_id = selectedProfileId;
       } else {
         // They are starting a new bracket. 
-        // We take what they typed and silently append the tag before sending to Supabase.
         const cleanName = newDisplayName.trim() || 'Unnamed Player';
         metadata.display_name = `${cleanName} (freeloader)`; 
       }
@@ -137,7 +134,7 @@ export default function Login() {
                 value={selectedProfileId}
                 onChange={(e) => {
                   setSelectedProfileId(e.target.value);
-                  if (e.target.value !== '') setNewDisplayName(''); // Clear new name if they decide to claim
+                  if (e.target.value !== '') setNewDisplayName('');
                 }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
               >
@@ -151,8 +148,7 @@ export default function Login() {
             </div>
           )}
 
-          {/* THE FIX: Conditional Display Name Input */}
-          {/* This renders IF they are signing up AND they haven't selected a bracket to claim */}
+          {/* Conditional Display Name Input */}
           {isSignUp && !selectedProfileId && (
             <div className="animate-in fade-in slide-in-from-top-2">
               <label className="block text-xs font-bold text-emerald-500 uppercase tracking-widest mb-2">Choose a Display Name</label>

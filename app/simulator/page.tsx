@@ -2,23 +2,24 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { API_TO_COMMON_MAP as API_MAP, INITIAL_KNOCKOUT_MATCHES } from '../../lib/constants';
+import { API_TO_COMMON_MAP as API_MAP, INITIAL_KNOCKOUT_MATCHES, assignThirdPlaceTeams } from '../../lib/constants';
 export const dynamic = 'force-dynamic';
-
 
 export default function Simulator() {
   const [loading, setLoading] = useState(true);
   
   // Interactive Bracket State
-const [matches, setMatches] = useState<any[]>(INITIAL_KNOCKOUT_MATCHES);  const [champion, setChampion] = useState<string | null>(null);
+  const [matches, setMatches] = useState<any[]>(INITIAL_KNOCKOUT_MATCHES);  
+  const [champion, setChampion] = useState<string | null>(null);
+  
   // Projection Data
   const [allPhase2Picks, setAllPhase2Picks] = useState<any[]>([]);
   const [baseScores, setBaseScores] = useState<any[]>([]); // Group Stage actuals
   const [projectedLeaderboard, setProjectedLeaderboard] = useState<any[]>([]);
 
   useEffect(() => {
-const initializeSimulator = async () => {
-let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));      
+    const initializeSimulator = async () => {
+      let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));      
 
       const groupRanks: Record<string, string[]> = {};
 
@@ -39,7 +40,9 @@ let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
         if (standingsRes.ok) {
           const sData = await standingsRes.json();
           const thirds: any[] = [];
-          const groupStandings = sData.standings?.filter((s: any) => s.type === 'TOTAL') || [];
+          
+          // CRITICAL FIX: Ensure we use the projected standings for the simulator
+          const groupStandings = sData.projectedStandings || sData.standings || [];
           
           groupStandings.forEach((group: any) => {
             const groupLetter = group.group.replace('GROUP_', '');
@@ -55,11 +58,18 @@ let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
             });
           });
 
+          // Sort and slice the top 8 advancing 3rd place teams
           thirds.sort((a,b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf));
-          advancingThirdPlace = thirds.slice(0, 8).map(t => t.team);
+          const top8Thirds = thirds.slice(0, 8).map(t => ({ team: t.team, group: t.group }));
+          
+          advancingThirdPlace = top8Thirds.map(t => t.team); // Used for Base P1 Points scoring
+
+          // Run the chronological constraint solver matrix on the top 8 advancing 3rds
+          const perfectAssignments = assignThirdPlaceTeams(top8Thirds);
 
           dynamicMatches = dynamicMatches.map((m: any) => {
             let newA = m.teamA; let newB = m.teamB;
+            
             const match1stA = newA.match(/1st Place Group ([A-L])/);
             if(match1stA && groupRanks[match1stA[1]]) newA = groupRanks[match1stA[1]][0] || newA;
             const match2ndA = newA.match(/2nd Place Group ([A-L])/);
@@ -69,16 +79,12 @@ let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
             const match2ndB = newB.match(/2nd Place Group ([A-L])/);
             if(match2ndB && groupRanks[match2ndB[1]]) newB = groupRanks[match2ndB[1]][1] || newB;
 
-            if (newA.includes('3Q Groups')) {
-              const groups = newA.replace('3Q Groups ', '').split('/');
-              const availableThird = thirds.find((t: any) => groups.includes(t.group));
-              if (availableThird) newA = availableThird.team;
+            // Apply official Annex C routing for 3rd place teams
+            if (perfectAssignments) {
+              if (newA.includes('3Q Groups')) newA = perfectAssignments[m.id] || newA;
+              if (newB.includes('3Q Groups')) newB = perfectAssignments[m.id] || newB;
             }
-            if (newB.includes('3Q Groups')) {
-              const groups = newB.replace('3Q Groups ', '').split('/');
-              const availableThird = thirds.find((t: any) => groups.includes(t.group));
-              if (availableThird) newB = availableThird.team;
-            }
+
             return { ...m, teamA: newA, teamB: newB };
           });
         }
@@ -106,11 +112,12 @@ let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
             
             const r32Matches = mData.matches.filter((m: any) => m.stage === 'LAST_32');
             
+            // CRITICAL FIX: Updated to match Wikipedia standard indices
             const R32_ANCHORS: Record<number, string> = {
-              1: groupRanks['A']?.[0], 2: groupRanks['B']?.[1], 3: groupRanks['D']?.[0], 4: groupRanks['E']?.[1],
-              5: groupRanks['G']?.[0], 6: groupRanks['H']?.[1], 7: groupRanks['J']?.[0], 8: groupRanks['K']?.[1],
-              9: groupRanks['B']?.[0], 10: groupRanks['C']?.[0], 11: groupRanks['E']?.[0], 12: groupRanks['F']?.[0],
-              13: groupRanks['H']?.[0], 14: groupRanks['I']?.[0], 15: groupRanks['K']?.[0], 16: groupRanks['L']?.[0],
+              1: groupRanks['E']?.[0], 2: groupRanks['I']?.[0], 3: groupRanks['A']?.[1], 4: groupRanks['F']?.[0],
+              5: groupRanks['C']?.[0], 6: groupRanks['E']?.[1], 7: groupRanks['A']?.[0], 8: groupRanks['L']?.[0],
+              9: groupRanks['K']?.[1], 10: groupRanks['H']?.[0], 11: groupRanks['D']?.[0], 12: groupRanks['G']?.[0],
+              13: groupRanks['J']?.[0], 14: groupRanks['D']?.[1], 15: groupRanks['B']?.[0], 16: groupRanks['K']?.[0],
             };
 
             dynamicMatches = dynamicMatches.map((m: any) => {
@@ -227,7 +234,7 @@ let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
     setProjectedLeaderboard(projected);
   }, [matches, champion, baseScores, allPhase2Picks]);
 
-const handlePick = (matchId: number, selectedTeam: string) => {
+  const handlePick = (matchId: number, selectedTeam: string) => {
     if (!selectedTeam) return;
     const currentMatch = matches.find(m => m.id === matchId);
     if (!currentMatch || currentMatch.isFinished) return; // Can't rewrite finished real games

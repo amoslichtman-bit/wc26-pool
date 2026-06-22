@@ -77,6 +77,16 @@ export default function Home() {
         const standingsRes = await fetch('/api/standings', { cache: 'no-store' });
         if (standingsRes.ok) {
           const sData = await standingsRes.json();
+          // --- DIAGNOSTIC: Check simulated end-of-group standings ---
+          const projectedSummary = (sData.projectedStandings || []).map((g: any) => ({
+            Group: g.group.replace('GROUP_', ''),
+            FirstPlace: g.table[0]?.team?.name || '-',
+            SecondPlace: g.table[1]?.team?.name || '-',
+            ThirdPlace: `${g.table[2]?.team?.name || '-'} (${g.table[2]?.points || 0} pts)`,
+          }));
+          console.log("📊 FULL PROJECTED GROUP STAGE FINISH:");
+          console.table(projectedSummary);
+          // ----------------------------------------------------------
           const thirds: any[] = [];
           
           // CRITICAL: We grab projectedStandings so our preliminary bracket simulates realistic full 3-game group outcomes!
@@ -483,7 +493,7 @@ export default function Home() {
           
           {!isBracketFinalized ? (
             <span className="text-amber-200/90 font-medium">
-              🚨 <strong className="text-white uppercase tracking-wider font-bold">Preliminary Status:</strong> Matchups currently displayed are best-guess projections based on projected group standings. The bracket will permanently lock in actual teams from the API when the Group Stage concludes.
+              🚨 <strong className="text-white uppercase tracking-wider font-bold">Preliminary Status:</strong> Matchups currently displayed are best-guess projections (favorites win out). The bracket will permanently lock in actual teams from the API when the Group Stage concludes.
             </span>
           ) : (
             <span className="text-emerald-400 font-bold">
