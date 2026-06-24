@@ -87,49 +87,41 @@ export function sortStandingsTable(a: any, b: any) {
 
 // --- FIFA 3RD PLACE MATRIX SOLVER ---
 
-// The 8 official knockout slots that require a 3rd place team, and their allowed groups
+// The 8 official knockout slots that require a 3rd place team.
+// Ordered strictly by FIFA's geographic priority logic (Annex C Matrix).
 export const THIRD_PLACE_SLOTS = [
-  { matchId: 1, allowedGroups: ['A', 'B', 'C', 'D', 'F'] }, // Match 74 (1E)
-  { matchId: 2, allowedGroups: ['C', 'D', 'F', 'G', 'H'] }, // Match 77 (1I)
-  { matchId: 7, allowedGroups: ['C', 'E', 'F', 'H', 'I'] }, // Match 79 (1A)
-  { matchId: 8, allowedGroups: ['E', 'H', 'I', 'J', 'K'] }, // Match 80 (1L)
-  { matchId: 11, allowedGroups: ['B', 'E', 'F', 'I', 'J'] }, // Match 81 (1D - USA)
-  { matchId: 12, allowedGroups: ['A', 'E', 'H', 'I', 'J'] }, // Match 82 (1G)
-  { matchId: 15, allowedGroups: ['E', 'F', 'G', 'I', 'J'] }, // Match 85 (1B)
-  { matchId: 16, allowedGroups: ['D', 'E', 'I', 'J', 'L'] }  // Match 87 (1K)
+  { matchId: 1, allowedGroups: ['C', 'D', 'A', 'F', 'B'] }, // Match 74 (1E)
+  { matchId: 2, allowedGroups: ['D', 'F', 'G', 'C', 'H'] }, // Match 77 (1I)
+  { matchId: 7, allowedGroups: ['F', 'C', 'E', 'H', 'I'] }, // Match 79 (1A)
+  { matchId: 8, allowedGroups: ['K', 'I', 'J', 'E', 'H'] }, // Match 80 (1L)
+  { matchId: 11, allowedGroups: ['B', 'I', 'J', 'E', 'F'] }, // Match 81 (1D - USA)
+  { matchId: 12, allowedGroups: ['A', 'I', 'J', 'H', 'E'] }, // Match 82 (1G)
+  { matchId: 15, allowedGroups: ['G', 'J', 'E', 'F', 'I'] }, // Match 85 (1B)
+  { matchId: 16, allowedGroups: ['L', 'D', 'I', 'J', 'E'] }  // Match 87 (1K)
 ];
 
-// Official FIFA "Annex C" manual overrides for specific advancing group combinations
+// Official FIFA manual overrides for specific advancing group combinations
 const FIFA_MATRIX_OVERRIDES: Record<string, Record<number, string>> = {
-  // Scenario: Groups A, E, H, J are eliminated. (This is your exact current Chalk Projection!)
-  // FIFA manually forces Match 74 to take C, saving B for Match 81 (USA).
   "B,C,D,F,G,I,K,L": { 1: "C", 2: "D", 7: "F", 8: "K", 11: "B", 12: "I", 15: "G", 16: "L" },
+  "B,C,D,F,G,I,J,L": { 1: "C", 2: "D", 7: "F", 8: "I", 11: "B", 12: "J", 15: "G", 16: "L" },
 };
 
 export function assignThirdPlaceTeams(advancingThirds: {team: string, group: string}[]) {
-  // 1. Sort the 8 advancing groups alphabetically (e.g., "B,C,D,F,G,I,K,L")
-  const sortedThirds = [...advancingThirds].sort((a, b) => {
-    const groupA = a.group.replace('GROUP_', '');
-    const groupB = b.group.replace('GROUP_', '');
-    return groupA.localeCompare(groupB);
-  });
-  
-  const combinationKey = sortedThirds.map(t => t.group.replace('GROUP_', '')).join(',');
+  // Check for a hardcoded override scenario first
+  const sortedLetters = advancingThirds.map(t => t.group.replace('GROUP_', '')).sort();
+  const combinationKey = sortedLetters.join(',');
 
-  // 2. Check if FIFA has a hardcoded Annex C override for this exact scenario
   if (FIFA_MATRIX_OVERRIDES[combinationKey]) {
     const override = FIFA_MATRIX_OVERRIDES[combinationKey];
     const result: Record<number, string> = {};
-    
-    // Map the letters back to the actual team names
     for (const [matchId, groupLetter] of Object.entries(override)) {
-      const teamObj = sortedThirds.find(t => t.group.replace('GROUP_', '') === groupLetter);
+      const teamObj = advancingThirds.find(t => t.group.replace('GROUP_', '') === groupLetter);
       if (teamObj) result[Number(matchId)] = teamObj.team;
     }
     return result;
   }
   
-  // 3. Fallback: Run the standard alphabetical backtracking solver
+  // Fallback: Run priority cascading backtracking tree solver
   const result: Record<number, string> = {};
   const usedTeams = new Set<string>();
 
@@ -138,20 +130,20 @@ export function assignThirdPlaceTeams(advancingThirds: {team: string, group: str
 
     const currentSlot = THIRD_PLACE_SLOTS[slotIndex];
 
-    for (const team of sortedThirds) {
-      const teamGroupLetter = team.group.replace('GROUP_', '');
+    for (const groupLetter of currentSlot.allowedGroups) {
+      const teamObj = advancingThirds.find(t => t.group.replace('GROUP_', '') === groupLetter);
       
-      if (!usedTeams.has(team.team) && currentSlot.allowedGroups.includes(teamGroupLetter)) {
-        result[currentSlot.matchId] = team.team;
-        usedTeams.add(team.team);
+      if (teamObj && !usedTeams.has(teamObj.team)) {
+        result[currentSlot.matchId] = teamObj.team;
+        usedTeams.add(teamObj.team);
 
         if (backtrack(slotIndex + 1)) return true;
 
         delete result[currentSlot.matchId];
-        usedTeams.delete(team.team);
+        usedTeams.delete(teamObj.team);
       }
     }
-    return false;
+    return false; 
   }
 
   const success = backtrack(0);
@@ -159,15 +151,17 @@ export function assignThirdPlaceTeams(advancingThirds: {team: string, group: str
 }
 
 // Global Power Rankings (1 = Strongest, 48 = Weakest) used to project unplayed matches
+// Global Power Rankings (1 = Strongest, 48 = Weakest) used to project unplayed matches
+// Perfectly synchronized to map all 48 active tournament group participants.
 export const PRE_TOURNAMENT_RANKS: Record<string, number> = {
   "Argentina": 1, "France": 2, "Spain": 3, "England": 4, "Brazil": 5, 
   "Belgium": 6, "Netherlands": 7, "Portugal": 8, "Germany": 9, "Colombia": 10, 
-  "Uruguay": 11, "United States": 12, "Mexico": 13, "Switzerland": 14, "Japan": 15, 
-  "Senegal": 16, "Iran": 17, "South Korea": 18, "Australia": 19, "Austria": 20, 
-  "Turkey": 21, "Sweden": 22, "Ecuador": 23, "Czechia": 24, "Poland": 25,
-  "Scotland": 26, "Egypt": 27, "Ivory Coast": 28, "Qatar": 29, "Canada": 30, 
-  "Tunisia": 31, "Algeria": 32, "Norway": 33, "Paraguay": 34, "Saudi Arabia": 35, 
-  "Nigeria": 36, "Panama": 37, "Mali": 38, "Uzbekistan": 39, "Bosnia & Herzigovina": 40, 
-  "Ghana": 41, "South Africa": 42, "Cape Verde": 43, "DR Congo": 44, "Iraq": 45, 
+  "Croatia": 11, "Uruguay": 12, "Morocco": 13, "United States": 14, "Mexico": 15, 
+  "Switzerland": 16, "Japan": 17, "Senegal": 18, "Iran": 19, "South Korea": 20, 
+  "Australia": 21, "Austria": 22, "Turkey": 23, "Sweden": 24, "Ecuador": 25, 
+  "Czechia": 26, "Scotland": 27, "Egypt": 28, "Ivory Coast": 29, "Bosnia & Herzigovina": 30, 
+  "Canada": 31, "Tunisia": 32, "Algeria": 33, "Norway": 34, "Paraguay": 35, 
+  "Saudi Arabia": 36, "Panama": 37, "Uzbekistan": 38, "Qatar": 39, "Ghana": 40, 
+  "South Africa": 41, "Cape Verde": 42, "DR Congo": 43, "Haiti": 44, "Iraq": 45, 
   "Jordan": 46, "Curacao": 47, "New Zealand": 48
 };
