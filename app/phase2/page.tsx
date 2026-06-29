@@ -179,33 +179,51 @@ export default function Home() {
 
             const processStage = (apiStageMatches: any[], roundString: string) => {
                 if (!apiStageMatches || apiStageMatches.length === 0) return;
-                const roundMatches = realMatches.filter((m: any) => m.round === roundString);
 
-                apiStageMatches.forEach((apiM, index) => {
-                    if (apiM.status === 'FINISHED' && roundMatches[index]) {
-                        let winnerName = null; let loserName = null;
+                apiStageMatches.forEach((apiM) => {
+                    if (apiM.status === 'FINISHED') {
+                        const rawHome = apiM.homeTeam?.name;
+                        const rawAway = apiM.awayTeam?.name;
+                        if (!rawHome || !rawAway) return;
 
-                        if (apiM.score?.winner === 'HOME_TEAM') {
-                            winnerName = apiM.homeTeam?.name; loserName = apiM.awayTeam?.name;
-                        } else if (apiM.score?.winner === 'AWAY_TEAM') {
-                            winnerName = apiM.awayTeam?.name; loserName = apiM.homeTeam?.name;
-                        }
+                        const tHome = API_MAP[rawHome] || rawHome;
+                        const tAway = API_MAP[rawAway] || rawAway;
 
-                        if (loserName) elimSet.add(API_MAP[loserName] || loserName);
+                        // Match the API game to our bracket slot by finding the exact pair of teams
+                        const matchToUpdate = realMatches.find((m: any) => 
+                            m.round === roundString && (
+                                (m.teamA === tHome && m.teamB === tAway) || 
+                                (m.teamA === tAway && m.teamB === tHome)
+                            )
+                        );
 
-                        if (winnerName) {
-                            const formattedWinner = API_MAP[winnerName] || winnerName;
-                            const matchToUpdate = roundMatches[index];
-                            matchToUpdate.winner = formattedWinner;
+                        if (matchToUpdate) {
+                            let winnerName = null; 
+                            let loserName = null;
 
-                            if (matchToUpdate.nextMatchId) {
-                                const nextM = realMatches.find((m: any) => m.id === matchToUpdate.nextMatchId);
-                                if (nextM) {
-                                    if (matchToUpdate.slot === 'home') nextM.teamA = formattedWinner;
-                                    else nextM.teamB = formattedWinner;
+                            if (apiM.score?.winner === 'HOME_TEAM') {
+                                winnerName = tHome; 
+                                loserName = tAway;
+                            } else if (apiM.score?.winner === 'AWAY_TEAM') {
+                                winnerName = tAway; 
+                                loserName = tHome;
+                            }
+
+                            if (loserName) elimSet.add(loserName);
+
+                            if (winnerName) {
+                                matchToUpdate.winner = winnerName;
+
+                                // Push real winner into the next round's slot
+                                if (matchToUpdate.nextMatchId) {
+                                    const nextM = realMatches.find((m: any) => m.id === matchToUpdate.nextMatchId);
+                                    if (nextM) {
+                                        if (matchToUpdate.slot === 'home') nextM.teamA = winnerName;
+                                        else nextM.teamB = winnerName;
+                                    }
+                                } else if (roundString === 'F') {
+                                    realChamp = winnerName;
                                 }
-                            } else if (roundString === 'F') {
-                                realChamp = formattedWinner;
                             }
                         }
                     }
