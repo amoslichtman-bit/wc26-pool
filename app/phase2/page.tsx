@@ -42,10 +42,18 @@ export default function Home() {
   const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
   const [adminEditMode, setAdminEditMode] = useState(false);
 
-  // Global View Logic (Companion Mode: stays unlocked unless viewing others)
+// Global View & Lock Logic
   const targetUserId = viewingUserId || user?.id;
   const isViewingOther = targetUserId && targetUserId !== user?.id;
-  const inputIsDisabled = isViewingOther && !(currentUserIsAdmin && adminEditMode);
+  
+  const targetProfile = profiles.find(p => p.id === targetUserId);
+  const isSubmitted = targetProfile?.knockout_picks_submitted === true;
+
+  // Bracket naturally locks if: viewing someone else OR deadline passed OR picks already submitted
+  const isNaturallyLocked = isViewingOther || isGlobalKnockoutTimeLocked || isSubmitted;
+
+  // Only unlock if an Admin explicitly checks the override box
+  const inputIsDisabled = isNaturallyLocked && !(currentUserIsAdmin && adminEditMode);
 
   // Real-time Deadline Enforcer for UI labels
   useEffect(() => {
