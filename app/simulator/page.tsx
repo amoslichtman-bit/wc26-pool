@@ -17,6 +17,12 @@ export default function Simulator() {
   const [baseScores, setBaseScores] = useState<any[]>([]); // Group Stage actuals
   const [projectedLeaderboard, setProjectedLeaderboard] = useState<any[]>([]);
 
+  // Win Probability States
+  const [winProbs, setWinProbs] = useState<Record<string, string> | null>(null);
+  const [isCalculatingProbs, setIsCalculatingProbs] = useState(false);
+  
+  const PHASE_2_WEIGHTS: Record<string, number> = { 'R32': 3, 'R16': 7, 'QF': 15, 'SF': 20, 'CHAMPION': 25 };
+
   useEffect(() => {
     const initializeSimulator = async () => {
       let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));      
@@ -91,7 +97,7 @@ export default function Simulator() {
           });
         }
 
-const initialScores = (profiles || []).map(profile => {
+        const initialScores = (profiles || []).map(profile => {
           let p1Points = 0;
           const userP1 = p1Picks?.filter(p => p.user_id === profile.id) || [];
           
@@ -130,7 +136,6 @@ const initialScores = (profiles || []).map(profile => {
             
             const r32Matches = mData.matches.filter((m: any) => m.stage === 'LAST_32');
             
-            // CRITICAL FIX: Updated to match Wikipedia standard indices
             const R32_ANCHORS: Record<number, string> = {
               1: groupRanks['E']?.[0], 2: groupRanks['I']?.[0], 3: groupRanks['A']?.[1], 4: groupRanks['F']?.[0],
               5: groupRanks['C']?.[0], 6: groupRanks['E']?.[1], 7: groupRanks['A']?.[0], 8: groupRanks['L']?.[0],
@@ -159,7 +164,7 @@ const initialScores = (profiles || []).map(profile => {
               return m;
             });
 
-// Process all rounds to lock in finished games
+            // Process all rounds to lock in finished games
             let simChamp = null;
             const processRound = (apiStageMatches: any[], roundStr: string) => {
                 apiStageMatches.forEach((apiM) => {
@@ -243,8 +248,6 @@ const initialScores = (profiles || []).map(profile => {
   useEffect(() => {
     if (baseScores.length === 0) return;
 
-    const PHASE_2_WEIGHTS: Record<string, number> = { 'R32': 3, 'R16': 7, 'QF': 15, 'SF': 20, 'CHAMPION': 25 };
-
     const projected = baseScores.map(user => {
       let p2Points = 0;
       const userPicks = allPhase2Picks.filter(p => p.user_id === user.id);
@@ -267,6 +270,9 @@ const initialScores = (profiles || []).map(profile => {
 
     projected.sort((a, b) => b.projectedTotal - a.projectedTotal);
     setProjectedLeaderboard(projected);
+    
+    // Clear probabilities if the user changes the board manually
+    setWinProbs(null); 
   }, [matches, champion, baseScores, allPhase2Picks]);
 
   const handlePick = (matchId: number, selectedTeam: string) => {
@@ -299,7 +305,7 @@ const initialScores = (profiles || []).map(profile => {
           if (nextM.winner === selectedTeam) {
             nextM.winner = null;
             if (nextM.round === 'F') setChampion(null);
-            curr = nextM; // Move pointer to the next round to keep scrubbing
+            curr = nextM; 
           } else {
             break;
           }
@@ -309,7 +315,6 @@ const initialScores = (profiles || []).map(profile => {
         target.winner = selectedTeam;
         if (target.round === 'F') setChampion(selectedTeam);
 
-        // If a different team was already sitting here, scrub the old team's downstream trail first
         if (oldWinner) {
           let curr = target;
           while (curr.nextMatchId) {
@@ -335,13 +340,127 @@ const initialScores = (profiles || []).map(profile => {
           if (nextM && !nextM.isFinished) {
             if (target.slot === 'home') nextM.teamA = selectedTeam;
             else nextM.teamB = selectedTeam;
-            nextM.winner = null; // Reset next match's winner because the matchup just changed
+            nextM.winner = null; 
           }
         }
       }
 
       return bracket;
     });
+  };
+
+  const calculateWinProbabilities = () => {
+    setIsCalculatingProbs(true);
+
+    // Yield to the main thread briefly so the button can show a "loading" state
+    setTimeout(() => {
+      const tallies: Record<string, number> = {};
+      baseScores.forEach(u => tallies[u.id] = 0);
+      let totalScenarios = 0;
+
+      // Create a clean bracket strictly from REALITY (ignoring user simulator clicks)
+      const bracket = JSON.parse(JSON.stringify(matches)).map((m: any) => ({
+        ...m,
+        winner: m.isFinished ? m.actualWinner : null,
+        simWinner: m.isFinished ? m.actualWinner : null
+      }));
+
+      // Failsafe: Browser will crash if we try to simulate 2 billion scenarios from the R32
+      const unresolvedCount = bracket.filter((m: any) => !m.isFinished).length;
+      if (unresolvedCount > 15) {
+         alert("Too many matches remaining to calculate locally (over 2 billion scenarios). Please wait until the Round of 16 to run probabilities.");
+         setIsCalculatingProbs(false);
+         return;
+      }
+
+      // Evaluator: Scores all users against one specific completed scenario
+      const evaluateBracket = () => {
+        const actualResults: Record<string, string[]> = { 'R32': [], 'R16': [], 'QF': [], 'SF': [], 'CHAMPION': [] };
+        bracket.forEach((m: any) => {
+          if (m.winner) {
+            actualResults[m.round].push(m.winner);
+            if (m.round === 'F') actualResults['CHAMPION'].push(m.winner);
+          }
+        });
+
+        let maxScore = -1;
+        let winners: string[] = [];
+
+        baseScores.forEach(user => {
+          let p2Pts = 0;
+          const userPicks = allPhase2Picks.filter(p => p.user_id === user.id);
+          userPicks.forEach(pick => {
+            const pts = PHASE_2_WEIGHTS[pick.predicted_round];
+            if (pts && actualResults[pick.predicted_round]?.includes(pick.team_name)) {
+              p2Pts += pts;
+            }
+          });
+          const total = user.p1Points + p2Pts;
+          
+          if (total > maxScore) {
+            maxScore = total;
+            winners = [user.id];
+          } else if (total === maxScore) {
+            winners.push(user.id); 
+          }
+        });
+
+        winners.forEach(id => tallies[id] += 1);
+        totalScenarios++;
+      };
+
+      // The Recursive Backtracking algorithm
+      const branchMatch = () => {
+        const nextMatchIndex = bracket.findIndex((m: any) => !m.isFinished && !m.simWinner);
+
+        if (nextMatchIndex === -1) {
+          evaluateBracket();
+          return;
+        }
+
+        const match = bracket[nextMatchIndex];
+        const teamA = match.teamA;
+        const teamB = match.teamB;
+
+        if (!teamA || !teamB || teamA.includes('Place') || teamB.includes('Place')) {
+          match.simWinner = 'TBD';
+          branchMatch();
+          match.simWinner = null;
+          return;
+        }
+
+        const nextM = match.nextMatchId ? bracket.find((m: any) => m.id === match.nextMatchId) : null;
+        const originalNextTeam = nextM ? (match.slot === 'home' ? nextM.teamA : nextM.teamB) : null;
+
+        // BRANCH 1: Team A Wins
+        match.simWinner = teamA;
+        match.winner = teamA;
+        if (nextM) { if (match.slot === 'home') nextM.teamA = teamA; else nextM.teamB = teamA; }
+        branchMatch();
+
+        // BRANCH 2: Team B Wins
+        match.simWinner = teamB;
+        match.winner = teamB;
+        if (nextM) { if (match.slot === 'home') nextM.teamA = teamB; else nextM.teamB = teamB; }
+        branchMatch();
+
+        // REVERT / BACKTRACK (Clears memory for the next branch)
+        match.simWinner = null;
+        match.winner = null;
+        if (nextM) { if (match.slot === 'home') nextM.teamA = originalNextTeam; else nextM.teamB = originalNextTeam; }
+      };
+
+      branchMatch();
+
+      const percentages: Record<string, string> = {};
+      Object.keys(tallies).forEach(id => {
+        const pct = (tallies[id] / totalScenarios) * 100;
+        percentages[id] = pct < 0.1 && pct > 0 ? '<0.1' : pct.toFixed(1);
+      });
+
+      setWinProbs(percentages);
+      setIsCalculatingProbs(false);
+    }, 50);
   };
 
   const renderRound = (roundName: string, title: string) => {
@@ -446,36 +565,51 @@ const initialScores = (profiles || []).map(profile => {
           </div>
 
           {/* PROJECTED LEADERBOARD SECTION */}
-          <div className="max-w-4xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="bg-sky-950/30 border-b border-sky-500/20 p-4">
-              <h2 className="text-lg font-black text-sky-400 uppercase tracking-widest text-center">Live Projected Leaderboard</h2>
+          <div className="max-w-3xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+            
+            <div className="bg-sky-950/30 border-b border-sky-500/20 p-4 flex flex-col sm:flex-row justify-between items-center">
+              <h2 className="text-lg font-black text-sky-400 uppercase tracking-widest">Live Projected Leaderboard</h2>
+              <button 
+                onClick={calculateWinProbabilities}
+                disabled={isCalculatingProbs}
+                className="mt-3 sm:mt-0 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-4 py-2 rounded-full transition-colors disabled:opacity-50"
+              >
+                {isCalculatingProbs ? 'Crunching Scenarios...' : 'Calculate Win % (Team Strength Agnostic)'}
+              </button>
             </div>
+
             <div className="overflow-x-auto">
               <table className="w-full whitespace-nowrap text-left">
                 <thead className="bg-slate-950/80 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-800">
                   <tr>
-                    <th className="px-4 py-3 font-bold w-16 text-center">Rank</th>
-                    <th className="px-4 py-3 font-bold">Player</th>
-                    <th className="px-4 py-3 font-bold text-center text-slate-500 border-l border-slate-800/50">Base Pts</th>
-                    <th className="px-4 py-3 font-bold text-center text-sky-500 border-r border-slate-800/50">Proj. Pts</th>
-                    <th className="px-6 py-3 font-black text-white text-right text-sm">Hypothetical Total</th>
+                    <th className="px-6 py-3 font-bold w-16 text-center">Rank</th>
+                    <th className="px-6 py-3 font-bold">Player</th>
+                    <th className="px-6 py-3 font-bold text-center text-sky-400 border-l border-slate-800/50">Win %</th>
+                    <th className="px-6 py-3 font-black text-white text-right text-sm">Proj. Points</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
                   {projectedLeaderboard.map((user, index) => (
                     <tr key={user.id} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-6 py-3 text-center">
                         <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full font-bold text-xs ${
-                          index === 0 ? 'bg-sky-500 text-slate-900' : 'bg-slate-800 text-slate-400'
+                          index === 0 ? 'bg-sky-500 text-slate-900 shadow-[0_0_10px_rgba(14,165,233,0.4)]' : 'bg-slate-800 text-slate-400'
                         }`}>
                           {index + 1}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-bold text-white text-sm">{user.name}</td>
-                      <td className="px-4 py-3 text-center text-slate-400 font-mono text-sm border-l border-slate-800/50">{user.p1Points}</td>
-                      <td className="px-4 py-3 text-center text-sky-400 font-mono text-sm border-r border-slate-800/50">+{user.projectedP2}</td>
+                      <td className="px-6 py-3 font-bold text-white text-sm">{user.name}</td>
+                      <td className="px-6 py-3 text-center border-l border-slate-800/50">
+                        {winProbs ? (
+                          <span className={`font-mono font-bold text-sm ${winProbs[user.id] === '0.0' ? 'text-slate-600' : 'text-sky-400'}`}>
+                            {winProbs[user.id]}%
+                          </span>
+                        ) : (
+                          <span className="text-slate-600 font-mono text-sm">-</span>
+                        )}
+                      </td>
                       <td className="px-6 py-3 text-right">
-                        <span className="font-black text-lg text-white">{user.projectedTotal}</span>
+                        <span className="font-black text-xl text-slate-200">{user.projectedTotal}</span>
                       </td>
                     </tr>
                   ))}
