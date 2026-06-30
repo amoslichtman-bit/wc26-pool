@@ -39,29 +39,31 @@ export default function Simulator() {
 
         if (standingsRes.ok) {
           const sData = await standingsRes.json();
-          const thirds: any[] = [];
+          const thirdPlaceTeams: any[] = [];
           
-          // CRITICAL FIX: Ensure we use the projected standings for the simulator
-          const groupStandings = sData.projectedStandings || sData.standings || [];
-          
-          groupStandings.forEach((group: any) => {
-            const groupLetter = group.group.replace('GROUP_', '');
+          if (sData.standings) {
+            // STRICT ALIGNMENT: Only use the TOTAL table, exactly like the main leaderboard
+            const groups = sData.standings.filter((s: any) => s.type === 'TOTAL');
             
-            // Build groupRanks mapping for the anchor logic
-            const sorted = group.table.sort((a: any, b: any) => (b.points - a.points) || (b.goalDifference - a.goalDifference) || (b.goalsFor - a.goalsFor));
-            groupRanks[groupLetter] = sorted.map((t: any) => API_MAP[t.team.name] || t.team.name);
+            groups.forEach((group: any) => {
+              const groupLetter = group.group.replace('GROUP_', '');
+              
+              const sorted = group.table.sort((a: any, b: any) => (b.points - a.points) || (b.goalDifference - a.goalDifference) || (b.goalsFor - a.goalsFor));
+              groupRanks[groupLetter] = sorted.map((t: any) => API_MAP[t.team.name] || t.team.name);
 
-            group.table.forEach((row: any, index: number) => {
-              const teamName = API_MAP[row.team.name] || row.team.name;
-              currentStandings[teamName] = { rank: index + 1 };
-              if (index === 2) thirds.push({ team: teamName, group: groupLetter, pts: row.points, gd: row.goalDifference, gf: row.goalsFor });
+              group.table.forEach((row: any, index: number) => {
+                const teamName = API_MAP[row.team.name] || row.team.name;
+                currentStandings[teamName] = { rank: index + 1 };
+                if (index === 2) {
+                  thirdPlaceTeams.push({ team: teamName, group: groupLetter, pts: row.points, gd: row.goalDifference, gf: row.goalsFor || 0 });
+                }
+              });
             });
-          });
+          }
 
           // Sort and slice the top 8 advancing 3rd place teams
-          thirds.sort((a,b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf));
-          const top8Thirds = thirds.slice(0, 8).map(t => ({ team: t.team, group: t.group }));
-          
+          thirdPlaceTeams.sort((a,b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf));
+          const top8Thirds = thirdPlaceTeams.slice(0, 8);
           advancingThirdPlace = top8Thirds.map(t => t.team); // Used for Base P1 Points scoring
 
           // Run the chronological constraint solver matrix on the top 8 advancing 3rds
