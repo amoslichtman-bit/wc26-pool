@@ -23,17 +23,7 @@ const TEAM_ELOS: Record<string, number> = {
 
 const getElo = (team: string) => TEAM_ELOS[team] || 1400;
 
-// Defines point values based on reaching a specific round
-const PHASE_2_WEIGHTS: Record<string, number> = { 'R16': 3, 'QF': 7, 'SF': 15, 'F': 20, 'CHAMPION': 25 };
-
-// Translates a predicted achievement into the match that MUST be won to achieve it
-const ROUND_TO_MATCH_MAP: Record<string, string> = { 
-  'R16': 'R32', 
-  'QF': 'R16', 
-  'SF': 'QF', 
-  'F': 'SF', 
-  'CHAMPION': 'CHAMPION' 
-};
+const PHASE_2_WEIGHTS: Record<string, number> = { 'R32': 3, 'R16': 7, 'QF': 15, 'SF': 20, 'CHAMPION': 25 };
 
 export default function Simulator() {
   const [loading, setLoading] = useState(true);
@@ -66,18 +56,7 @@ export default function Simulator() {
           supabase.from('phase_2_picks').select('user_id, team_name, predicted_round').limit(10000)
         ]);
 
-        if (p2Picks) {
-          // --- MISSING FINALS AUTO-PATCH ---
-          // Silently injects an 'F' pick for any team designated as 'CHAMPION'
-          const enrichedPicks = [...p2Picks];
-          const champPicks = p2Picks.filter((p: any) => p.predicted_round === 'CHAMPION');
-          
-          champPicks.forEach((cp: any) => {
-            const hasF = p2Picks.some((p: any) => p.user_id === cp.user_id && p.predicted_round === 'F' && p.team_name === cp.team_name);
-            if (!hasF) enrichedPicks.push({ ...cp, predicted_round: 'F' });
-          });
-          setAllPhase2Picks(enrichedPicks);
-        }
+        if (p2Picks) setAllPhase2Picks(p2Picks);
 
         let currentStandings: Record<string, { rank: number }> = {};
         let advancingThirdPlace: string[] = [];
@@ -271,7 +250,6 @@ export default function Simulator() {
     initializeSimulator();
   }, []);
 
-  // Recalculate Leaderboard whenever matches state changes
   useEffect(() => {
     if (baseScores.length === 0) return;
 
@@ -283,12 +261,10 @@ export default function Simulator() {
         const round = pick.predicted_round;
         const pts = PHASE_2_WEIGHTS[round];
         if (pts) {
-          const matchRequiredToWin = ROUND_TO_MATCH_MAP[round];
-          
-          if (matchRequiredToWin === 'CHAMPION') {
+          if (round === 'CHAMPION') {
             if (champion === pick.team_name) p2Points += pts;
-          } else if (matchRequiredToWin) {
-            const matchWon = matches.find(m => m.round === matchRequiredToWin && m.winner === pick.team_name);
+          } else {
+            const matchWon = matches.find(m => m.round === round && m.winner === pick.team_name);
             if (matchWon) p2Points += pts;
           }
         }
@@ -389,13 +365,10 @@ export default function Simulator() {
         basePts: user.p1Points,
         picks: allPhase2Picks
           .filter(p => p.user_id === user.id)
-          .map(p => {
-            const targetMatch = ROUND_TO_MATCH_MAP[p.predicted_round];
-            return {
-              key: targetMatch ? p.team_name + '_' + targetMatch : '',
-              pts: PHASE_2_WEIGHTS[p.predicted_round] || 0
-            };
-          }).filter(p => p.key !== '')
+          .map(p => ({
+            key: p.team_name + '_' + p.predicted_round,
+            pts: PHASE_2_WEIGHTS[p.predicted_round] || 0
+          }))
       };
     });
 

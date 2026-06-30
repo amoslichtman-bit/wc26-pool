@@ -15,13 +15,13 @@ export default function Home() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   
-  // User's Interactive Bracket State initialized with the corrected structure
+  // User's Interactive Bracket State
   const [matches, setMatches] = useState<any[]>(INITIAL_KNOCKOUT_MATCHES);   
   const [baseBracket, setBaseBracket] = useState<any[]>([]); 
   const [champion, setChampion] = useState<string | null>(null);
   const [tiebreakerScore, setTiebreakerScore] = useState<string>('');
   
-  // Real-Life Tournament Data (For March Madness Visual Scoring)
+  // Real-Life Tournament Data
   const [actualBracket, setActualBracket] = useState<any[]>([]);
   const [actualChampion, setActualChampion] = useState<string | null>(null);
   const [eliminatedTeams, setEliminatedTeams] = useState<Set<string>>(new Set());
@@ -76,16 +76,7 @@ export default function Home() {
 
       const { data: allPicksData } = await supabase.from('phase_2_picks').select('*').limit(10000);
       if (allPicksData) {
-        // --- MISSING FINALS AUTO-PATCH ---
-        // Silently injects an 'F' pick for any team designated as 'CHAMPION'
-        const enrichedPicks = [...allPicksData];
-        const champPicks = allPicksData.filter((p: any) => p.predicted_round === 'CHAMPION');
-        
-        champPicks.forEach((cp: any) => {
-          const hasF = allPicksData.some((p: any) => p.user_id === cp.user_id && p.predicted_round === 'F' && p.team_name === cp.team_name);
-          if (!hasF) enrichedPicks.push({ ...cp, predicted_round: 'F' });
-        });
-        setAllPhase2Picks(enrichedPicks);
+        setAllPhase2Picks(allPicksData);
       }
 
       let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
@@ -98,7 +89,6 @@ export default function Home() {
           const sData = await standingsRes.json();
           const thirds: any[] = [];
           
-          // CRITICAL: We grab projectedStandings so our preliminary bracket simulates realistic full 3-game group outcomes!
           const groupStandings = sData.projectedStandings || sData.standings || [];
           
           groupStandings.forEach((group: any) => {
@@ -114,7 +104,6 @@ export default function Home() {
           thirds.sort((a, b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf));
           const top8Thirds = thirds.slice(0, 8).map(t => ({ team: t.team, group: t.group }));
 
-          // Run the chronological constraint solver matrix on the top 8 advancing 3rds
           const perfectAssignments = assignThirdPlaceTeams(top8Thirds);
           
           dynamicMatches = dynamicMatches.map((m: any) => {
@@ -133,7 +122,6 @@ export default function Home() {
             const match2ndB = newB.match(/2nd Place Group ([A-L])/);
             if (match2ndB && groupRanks[match2ndB[1]]) newB = groupRanks[match2ndB[1]][1] || newB;
 
-            // Map resolved 3rd place teams safely using the dictionary returned by the backend solver
             if (perfectAssignments) {
               if (newA.includes('3Q Groups')) newA = perfectAssignments[m.id] || newA;
               if (newB.includes('3Q Groups')) newB = perfectAssignments[m.id] || newB;
@@ -151,28 +139,12 @@ export default function Home() {
             
             const r32Matches = data.matches.filter((m: any) => m.stage === 'LAST_32');
             
-            // --- TOPOLOGY FIX --- 
-            // Swapped slots 5-8 with 9-12 to align with official FIFA routing rules
+            // Map the undisputed positions to their specific updated index structures matching Wikipedia
             const R32_ANCHORS: Record<number, string> = {
-              1: groupRanks['E']?.[0], 
-              2: groupRanks['I']?.[0], 
-              3: groupRanks['A']?.[1], 
-              4: groupRanks['F']?.[0],
-              
-              5: groupRanks['K']?.[1], 
-              6: groupRanks['H']?.[0], 
-              7: groupRanks['D']?.[0], 
-              8: groupRanks['G']?.[0],
-              
-              9: groupRanks['C']?.[0], 
-              10: groupRanks['E']?.[1], 
-              11: groupRanks['A']?.[0], 
-              12: groupRanks['L']?.[0],
-              
-              13: groupRanks['J']?.[0], 
-              14: groupRanks['D']?.[1], 
-              15: groupRanks['B']?.[0], 
-              16: groupRanks['K']?.[0],
+              1: groupRanks['E']?.[0], 2: groupRanks['I']?.[0], 3: groupRanks['A']?.[1], 4: groupRanks['F']?.[0],
+              5: groupRanks['K']?.[1], 6: groupRanks['H']?.[0], 7: groupRanks['D']?.[0], 8: groupRanks['G']?.[0],
+              9: groupRanks['C']?.[0], 10: groupRanks['E']?.[1], 11: groupRanks['A']?.[0], 12: groupRanks['L']?.[0],
+              13: groupRanks['J']?.[0], 14: groupRanks['D']?.[1], 15: groupRanks['B']?.[0], 16: groupRanks['K']?.[0],
             };
 
             dynamicMatches = dynamicMatches.map((m: any) => {
@@ -213,7 +185,6 @@ export default function Home() {
                         const tHome = API_MAP[rawHome] || rawHome;
                         const tAway = API_MAP[rawAway] || rawAway;
 
-                        // Match the API game to our bracket slot by finding the exact pair of teams
                         const matchToUpdate = realMatches.find((m: any) => 
                             m.round === roundString && (
                                 (m.teamA === tHome && m.teamB === tAway) || 
@@ -238,7 +209,6 @@ export default function Home() {
                             if (winnerName) {
                                 matchToUpdate.winner = winnerName;
 
-                                // Push real winner into the next round's slot
                                 if (matchToUpdate.nextMatchId) {
                                     const nextM = realMatches.find((m: any) => m.id === matchToUpdate.nextMatchId);
                                     if (nextM) {
@@ -422,7 +392,6 @@ export default function Home() {
             const isMatchFinished = actualMatch && actualMatch.winner !== null;
             const actualTeamForSlot = actualMatch ? actualMatch[slotIndex] : null;
 
-            // Determine if the user's team advanced to a slot they never reached in reality
             const hasRealTeamForSlot = actualTeamForSlot && !actualTeamForSlot.includes('Place') && !actualTeamForSlot.includes('3Q');
             const isGhostTeam = teamName && hasRealTeamForSlot && teamName !== actualTeamForSlot;
 
@@ -430,7 +399,6 @@ export default function Home() {
             let content = <span className="truncate pr-2">{formatTeamName(teamName)}</span>;
 
             if (isGhostTeam) {
-                // 1. GHOST TEAM (Team was eliminated earlier, but pushed forward by user)
                 btnClass = 'bg-red-500/10 text-red-400 border border-red-500/30';
                 content = (
                     <div className="flex flex-col text-left truncate">
@@ -439,7 +407,6 @@ export default function Home() {
                     </div>
                 );
             } else if (isSelected) {
-                // 2. SELECTED TEAM (User picked them to win THIS match)
                 if (isMatchFinished) {
                     if (actualMatch.winner === teamName) {
                         btnClass = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50';
@@ -463,7 +430,6 @@ export default function Home() {
                     content = <span className="truncate pr-2 font-bold">{formatTeamName(teamName)}</span>;
                 }
             } else if (eliminatedTeams.has(teamName)) {
-                // 3. ELIMINATED TEAM (Lost this match, wasn't picked to advance further)
                 btnClass = 'bg-slate-800/80 text-slate-500 border border-transparent';
                 content = (
                     <div className="flex flex-col text-left truncate">
