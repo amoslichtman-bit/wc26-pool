@@ -390,7 +390,7 @@ export default function Simulator() {
     });
   };
 
-  const calculateWinProbabilities = () => {
+const calculateWinProbabilities = () => {
     setIsCalculatingProbs(true);
 
     setTimeout(() => {
@@ -398,6 +398,13 @@ export default function Simulator() {
       const tallies: Record<string, number> = {};
       baseScores.forEach(u => tallies[u.id] = 0);
 
+      // 1. THE SPEED FIX: Pre-calculate user picks OUTSIDE the 10,000x loop
+      const userPicksMap: Record<string, any[]> = {};
+      baseScores.forEach(user => {
+        userPicksMap[user.id] = allPhase2Picks.filter(p => p.user_id === user.id);
+      });
+
+      // 2. Clean bracket strictly from REALITY
       const baseBracket = JSON.parse(JSON.stringify(matches)).map((m: any) => ({
         ...m,
         winner: m.isFinished ? m.actualWinner : null
@@ -450,7 +457,9 @@ export default function Simulator() {
 
         baseScores.forEach(user => {
           let p2Pts = 0;
-          const userPicks = allPhase2Picks.filter(p => p.user_id === user.id);
+          // Use the lightning-fast dictionary lookup here
+          const userPicks = userPicksMap[user.id] || [];
+          
           userPicks.forEach(pick => {
             const pts = PHASE_2_WEIGHTS[pick.predicted_round];
             if (pts && actualResults[pick.predicted_round]?.includes(pick.team_name)) {
@@ -480,7 +489,7 @@ export default function Simulator() {
       setIsCalculatingProbs(false);
     }, 50);
   };
-
+  
   const renderRound = (roundName: string, title: string) => {
     const roundMatches = matches.filter(m => m.round === roundName);
 
