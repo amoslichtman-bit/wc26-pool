@@ -16,7 +16,7 @@ export default function Leaderboard() {
     const now = new Date().getTime();
     setIsGroupStageFinalized(now >= groupStageEndTime);
 
-const buildLeaderboard = async () => {
+    const buildLeaderboard = async () => {
       try {
         let currentStandings: Record<string, { rank: number, pts: number, gd: number, gf: number }> = {};
         let advancingThirdPlace: string[] = [];
@@ -117,7 +117,6 @@ const buildLeaderboard = async () => {
               exactPlacements += 1; 
             }
           });
-          
 
           const PHASE_2_WEIGHTS: Record<string, number> = {
             'R32': 3, 'R16': 7, 'QF': 15, 'SF': 20, 'CHAMPION': 25 
@@ -162,7 +161,7 @@ const buildLeaderboard = async () => {
 
   return (
     <main className="min-h-screen p-8 bg-slate-950 text-slate-200 font-sans pb-32">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         
         <header className="mb-10 text-center">
           <h1 className="text-5xl font-black text-amber-500 mb-3 tracking-tight">Global Leaderboard</h1>
@@ -180,30 +179,33 @@ const buildLeaderboard = async () => {
           </div>
         </header>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden max-w-4xl mx-auto">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px] whitespace-nowrap text-left">
+            <table className="w-full whitespace-nowrap text-left">
               <thead className="bg-slate-950/50 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-800">
                 <tr>
-                  <th className="px-3 py-2 font-bold w-12 text-center">Rank</th>
-                  <th className="px-3 py-2 font-bold">Player</th>
+                  <th className="px-4 py-3 font-bold w-12 text-center">Rank</th>
+                  <th className="px-4 py-3 font-bold">Player</th>
                   
-                  <th className="px-2 py-2 font-bold text-center border-l border-slate-800/50 leading-tight text-xs">Group Stage<br/>Advancing<br/><span className="text-[8px] text-emerald-500/70 lowercase tracking-normal">(+3/ea)</span></th>
-                  <th className="px-2 py-2 font-bold text-center border-r border-slate-800/50 leading-tight text-xs">Group Stage<br/>Exact<br/><span className="text-[8px] text-amber-500/70 lowercase tracking-normal">(+1/ea)</span></th>
+                  {/* Consolidated Group Stage Column */}
+                  <th className="px-3 py-3 font-bold text-center border-x border-slate-800/50 leading-tight text-xs">
+                    Group Stage<br/>
+                    <span className="text-[10px] text-emerald-500/70 font-normal normal-case tracking-normal">Pts</span>
+                  </th>
                   
-                  <th className="px-1.5 py-2 font-bold text-center text-slate-500 leading-tight text-xs">R16<br/><span className="text-[8px] text-slate-600 lowercase tracking-normal">(+3)</span></th>
-                  <th className="px-1.5 py-2 font-bold text-center text-slate-500 leading-tight text-xs">QF<br/><span className="text-[8px] text-slate-600 lowercase tracking-normal">(+7)</span></th>
-                  <th className="px-1.5 py-2 font-bold text-center text-slate-500 leading-tight text-xs">SF<br/><span className="text-[8px] text-slate-600 lowercase tracking-normal">(+15)</span></th>
-                  <th className="px-1.5 py-2 font-bold text-center text-slate-500 leading-tight text-xs">F<br/><span className="text-[8px] text-slate-600 lowercase tracking-normal">(+20)</span></th>
-                  <th className="px-1.5 py-2 font-bold text-center text-slate-500 leading-tight text-xs">CHAMP<br/><span className="text-[8px] text-slate-600 lowercase tracking-normal">(+25)</span></th>
+                  <th className="px-2 py-3 font-bold text-center text-slate-500 leading-tight text-xs">R16<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+3)</span></th>
+                  <th className="px-2 py-3 font-bold text-center text-slate-500 leading-tight text-xs">QF<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+7)</span></th>
+                  <th className="px-2 py-3 font-bold text-center text-slate-500 leading-tight text-xs">SF<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+15)</span></th>
+                  <th className="px-2 py-3 font-bold text-center text-slate-500 leading-tight text-xs">F<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+20)</span></th>
+                  <th className="px-2 py-3 font-bold text-center text-slate-500 leading-tight text-xs">CHAMP<br/><span className="text-[9px] text-slate-600 lowercase tracking-normal">(+25)</span></th>
                   
-                  <th className="sticky right-0 px-3 py-2 font-black text-white text-right text-sm border-l border-slate-800/50 bg-slate-950/80 backdrop-blur z-10">Total</th>
+                  <th className="sticky right-0 px-4 py-3 font-black text-white text-right text-sm border-l border-slate-800/50 bg-slate-950/80 backdrop-blur z-10">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
                 {leaderboard.map((user, index) => (
                   <tr key={user.id} className="hover:bg-slate-800/30 transition-colors group">
-                    <td className="px-3 py-2 text-center">
+                    <td className="px-4 py-3 text-center">
                       <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full font-bold text-xs ${
                         index === 0 ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(245,158,11,0.4)]' :
                         index === 1 ? 'bg-slate-300 text-slate-900' :
@@ -213,32 +215,30 @@ const buildLeaderboard = async () => {
                         {index + 1}
                       </span>
                     </td>
-                    <td className="px-3 py-2 font-bold text-white text-sm">{user.name}</td>
+                    <td className="px-4 py-3 font-bold text-white text-sm">{user.name}</td>
                     
-                    <td className="px-2 py-2 text-center text-slate-300 font-mono text-sm border-l border-slate-800/50">
-                      {user.correctAdvancing * 3}
-                    </td>
-                    <td className="px-2 py-2 text-center text-slate-300 font-mono text-sm border-r border-slate-800/50">
-                      {user.exactPlacements}
+                    {/* Consolidated Group Stage Cell */}
+                    <td className="px-3 py-3 text-center text-slate-200 font-mono font-bold text-sm border-x border-slate-800/50 bg-slate-900/30">
+                      {user.p1Points}
                     </td>
                     
-                    <td className="px-1.5 py-2 text-center text-slate-300 font-mono text-sm">
+                    <td className="px-2 py-3 text-center text-slate-300 font-mono text-sm">
                       {user.p2RoundScores['R32']}
                     </td>
-                    <td className="px-1.5 py-2 text-center text-slate-300 font-mono text-sm">
+                    <td className="px-2 py-3 text-center text-slate-300 font-mono text-sm">
                       {user.p2RoundScores['R16']}
                     </td>
-                    <td className="px-1.5 py-2 text-center text-slate-300 font-mono text-sm">
+                    <td className="px-2 py-3 text-center text-slate-300 font-mono text-sm">
                       {user.p2RoundScores['QF']}
                     </td>
-                    <td className="px-1.5 py-2 text-center text-slate-300 font-mono text-sm">
+                    <td className="px-2 py-3 text-center text-slate-300 font-mono text-sm">
                       {user.p2RoundScores['SF']}
                     </td>
-                    <td className="px-1.5 py-2 text-center text-amber-500 font-mono text-sm">
+                    <td className="px-2 py-3 text-center text-amber-500 font-mono text-sm font-semibold">
                       {user.p2RoundScores['CHAMPION']}
                     </td>
 
-                    <td className="sticky right-0 px-3 py-2 text-right border-l border-slate-800/50 bg-slate-950/80 backdrop-blur z-10">
+                    <td className="sticky right-0 px-4 py-3 text-right border-l border-slate-800/50 bg-slate-950/80 backdrop-blur z-10">
                       <span className="font-black text-lg text-emerald-400 group-hover:text-emerald-300 transition-colors">{user.totalPoints}</span>
                     </td>
                   </tr>
