@@ -96,13 +96,27 @@ const buildLeaderboard = async () => {
             const liveTeamData = currentStandings[pick.team_name];
             if (!liveTeamData) return;
 
+            // 1. ADVANCING POINTS (+3)
             const isActuallyAdvancing = liveTeamData.rank === 1 || liveTeamData.rank === 2 || advancingThirdPlace.includes(pick.team_name);
             const userPredictedAdvance = ['1', '2', '3Q'].includes(pick.placement);
 
-            if (userPredictedAdvance && isActuallyAdvancing) { p1Points += 3; correctAdvancing += 1; }
+            if (userPredictedAdvance && isActuallyAdvancing) { 
+              p1Points += 3; 
+              correctAdvancing += 1; 
+            }
             
-            let predictedNumericRank = parseInt(pick.placement.replace('Q', ''));
-            if (predictedNumericRank === liveTeamData.rank) { p1Points += 1; exactPlacements += 1; }
+            // 2. STRICT EXACT PLACEMENT POINTS (+1)
+            // Format the API's actual result into Ted's exact strings ('1', '2', '3Q', '3', '4')
+            let actualPlacementString = liveTeamData.rank.toString();
+            if (liveTeamData.rank === 3) {
+              actualPlacementString = advancingThirdPlace.includes(pick.team_name) ? '3Q' : '3';
+            }
+
+            // Enforce perfect string comparison (e.g., '3Q' must match '3Q', it fails if API says '3')
+            if (pick.placement === actualPlacementString) { 
+              p1Points += 1; 
+              exactPlacements += 1; 
+            }
           });
 
           const PHASE_2_WEIGHTS: Record<string, number> = {
