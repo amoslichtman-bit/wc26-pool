@@ -59,6 +59,10 @@ const TEAM_ELOS: Record<string, number> = {
   'Qatar': 1411
 };
 
+// Win Probability States
+  const [winProbs, setWinProbs] = useState<Record<string, string> | null>(null);
+  const [isCalculatingProbs, setIsCalculatingProbs] = useState(false);
+  const [simProgress, setSimProgress] = useState<number | null>(null); // ADD THIS LINE
 const getElo = (team: string) => TEAM_ELOS[team] || 1400;
 
 export default function Simulator() {
@@ -392,104 +396,128 @@ export default function Simulator() {
 
 const calculateWinProbabilities = () => {
     setIsCalculatingProbs(true);
+    setSimProgress(0);
 
-    setTimeout(() => {
-      const ITERATIONS = 10000;
-      const tallies: Record<string, number> = {};
-      baseScores.forEach(u => tallies[u.id] = 0);
+    // Pre-process data OUTSIDE the loop for maximum speed
+    const ITERATIONS = 10000;
+    const CHUNK_SIZE = 500;
+    let currentIteration = 0;
 
-      // 1. THE SPEED FIX: Pre-calculate user picks OUTSIDE the 10,000x loop
-      const userPicksMap: Record<string, any[]> = {};
-      baseScores.forEach(user => {
-        userPicksMap[user.id] = allPhase2Picks.filter(p => p.user_id === user.id);
-      });
+    const tallies: Record<string, number> = {};
+    baseScores.forEach(u => tallies[u.id] = 0);
 
-      // 2. Clean bracket strictly from REALITY
-      const baseBracket = JSON.parse(JSON.stringify(matches)).map((m: any) => ({
-        ...m,
-        winner: m.isFinished ? m.actualWinner : null
-      }));
+    // Fast user pick dictionary (O(1) lookups)
+    const userPicksFast = baseScores.map(user => {
+      return {
+        id: user.id,
+        basePts: user.p1Points,
+        picks: allPhase2Picks
+          .filter(p => p.user_id === user.id)
+          .map(p => ({
+            key: p.team_name + '_' + p.predicted_round,
+            pts: PHASE_2_WEIGHTS[p.predicted_round] || 0
+          }))
+      };
+    });
 
-      const roundOrder: Record<string, number> = { 'R32': 1, 'R16': 2, 'QF': 3, 'SF': 4, 'F': 5 };
-      const sortedBracket = baseBracket.sort((a: any, b: any) => roundOrder[a.round] - roundOrder[b.round]);
+    // Isolate unresolved matches and sort chronologically
+    const roundOrder: Record<string, number> = { 'R32': 1, 'R16': 2, 'QF': 3, 'SF': 4, 'F': 5 };
+    const unresolvedMatches = matches
+      .filter((m: any) => !m.isFinished)
+      .sort((a: any, b: any) => roundOrder[a.round] - roundOrder[b.round]);
 
-      for (let i = 0; i < ITERATIONS; i++) {
-        const simBracket = sortedBracket.map((m: any) => ({ ...m }));
-        const matchMap = new Map();
-        simBracket.forEach((m: any) => matchMap.set(m.id, m));
+    // Pre-calculate finished matches' actual results
+    const baselineResults: Record<string, boolean> = {};
+    matches.forEach((m: any) => {
+      if (m.isFinished && m.actualWinner) {
+        baselineResults[m.actualWinner + '_' + m.round] = true;
+        if (m.round === 'F') baselineResults[m.actualWinner + '_CHAMPION'] = true;
+      }
+    });
 
-        const actualResults: Record<string, string[]> = { 'R32': [], 'R16': [], 'QF': [], 'SF': [], 'CHAMPION': [] };
+    // The Async Chunk Processor
+    const processChunk = () => {
+      const end = Math.min(currentIteration + CHUNK_SIZE, ITERATIONS);
 
-        simBracket.forEach((match: any) => {
-          let winner = match.winner;
-          
-          if (!winner) {
-            const teamA = match.teamA;
-            const teamB = match.teamB;
+      for (; currentIteration < end; currentIteration++) {
+        // Clone the baseline results for this single iteration
+        const simResults = { ...baselineResults };
+        const dynamicTeams: Record<string, string> = {};
 
-            if (teamA && teamB && !teamA.includes('Place') && !teamB.includes('Place')) {
-              const eloA = getElo(teamA);
-              const eloB = getElo(teamB);
-              const probA = 1 / (1 + Math.pow(10, (eloB - eloA) / 400));
-              
-              winner = Math.random() < probA ? teamA : teamB;
-            } else {
-              winner = Math.random() < 0.5 ? teamA : teamB; 
-            }
+        unresolvedMatches.forEach((match: any) => {
+          const teamA = dynamicTeams[match.id + '_A'] || match.teamA;
+          const teamB = dynamicTeams[match.id + '_B'] || match.teamB;
+
+          let winner = null;
+          if (teamA && teamB && !teamA.includes('Place') && !teamB.includes('Place')) {
+            const eloA = getElo(teamA);
+            const eloB = getElo(teamB);
+            const probA = 1 / (1 + Math.pow(10, (eloB - eloA) / 400));
+            winner = Math.random() < probA ? teamA : teamB;
+          } else {
+            winner = Math.random() < 0.5 ? teamA : teamB;
           }
 
           if (winner) {
-            actualResults[match.round].push(winner);
-            if (match.round === 'F') actualResults['CHAMPION'].push(winner);
-            
+            simResults[winner + '_' + match.round] = true;
+            if (match.round === 'F') simResults[winner + '_CHAMPION'] = true;
+
+            // Pass winner dynamically to next round's slot
             if (match.nextMatchId) {
-              const nextM = matchMap.get(match.nextMatchId);
-              if (nextM) {
-                if (match.slot === 'home') nextM.teamA = winner;
-                else nextM.teamB = winner;
-              }
+              const slotKey = match.nextMatchId + (match.slot === 'home' ? '_A' : '_B');
+              dynamicTeams[slotKey] = winner;
             }
           }
         });
 
+        // Score Users against this iteration's outcome
         let maxScore = -1;
         let iterationWinners: string[] = [];
 
-        baseScores.forEach(user => {
-          let p2Pts = 0;
-          // Use the lightning-fast dictionary lookup here
-          const userPicks = userPicksMap[user.id] || [];
+        for (let i = 0; i < userPicksFast.length; i++) {
+          const user = userPicksFast[i];
+          let pts = user.basePts;
           
-          userPicks.forEach(pick => {
-            const pts = PHASE_2_WEIGHTS[pick.predicted_round];
-            if (pts && actualResults[pick.predicted_round]?.includes(pick.team_name)) {
-              p2Pts += pts;
-            }
-          });
-          const total = user.p1Points + p2Pts;
-          
-          if (total > maxScore) {
-            maxScore = total;
-            iterationWinners = [user.id];
-          } else if (total === maxScore) {
-            iterationWinners.push(user.id); 
+          for (let j = 0; j < user.picks.length; j++) {
+            if (simResults[user.picks[j].key]) pts += user.picks[j].pts;
           }
-        });
 
-        iterationWinners.forEach(id => tallies[id] += 1);
+          if (pts > maxScore) {
+            maxScore = pts;
+            iterationWinners = [user.id];
+          } else if (pts === maxScore) {
+            iterationWinners.push(user.id);
+          }
+        }
+
+        for (let k = 0; k < iterationWinners.length; k++) {
+          tallies[iterationWinners[k]] += 1;
+        }
       }
 
-      const percentages: Record<string, string> = {};
-      Object.keys(tallies).forEach(id => {
-        const pct = (tallies[id] / ITERATIONS) * 100;
-        percentages[id] = pct < 0.1 && pct > 0 ? '<0.1' : pct.toFixed(1);
-      });
+      // Progress Check
+      if (currentIteration < ITERATIONS) {
+        // Yield to main thread to update UI, then queue next chunk
+        setSimProgress(Math.round((currentIteration / ITERATIONS) * 100));
+        setTimeout(processChunk, 0); 
+      } else {
+        // Finalize calculations
+        const percentages: Record<string, string> = {};
+        Object.keys(tallies).forEach(id => {
+          const pct = (tallies[id] / ITERATIONS) * 100;
+          percentages[id] = pct < 0.1 && pct > 0 ? '<0.1' : pct.toFixed(1);
+        });
 
-      setWinProbs(percentages);
-      setIsCalculatingProbs(false);
-    }, 50);
+        setWinProbs(percentages);
+        setSimProgress(null);
+        setIsCalculatingProbs(false);
+      }
+    };
+
+    // Kick off the first chunk
+    setTimeout(processChunk, 0);
   };
-  
+
   const renderRound = (roundName: string, title: string) => {
     const roundMatches = matches.filter(m => m.round === roundName);
 
@@ -599,9 +627,11 @@ const calculateWinProbabilities = () => {
               <button 
                 onClick={calculateWinProbabilities}
                 disabled={isCalculatingProbs}
-                className="mt-3 sm:mt-0 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-4 py-2 rounded-full transition-colors disabled:opacity-50 w-full sm:w-auto"
+                className="mt-3 sm:mt-0 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-4 py-2 rounded-full transition-colors disabled:opacity-50 w-full sm:w-auto min-w-[250px]"
               >
-                {isCalculatingProbs ? 'Running 10,000 Simulations...' : 'Calculate Win % (Elo Monte Carlo)'}
+                {isCalculatingProbs 
+                  ? `Simulating... ${simProgress}%` 
+                  : 'Calculate Win % (Elo Monte Carlo)'}
               </button>
             </div>
 
