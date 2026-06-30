@@ -157,47 +157,64 @@ const initialScores = (profiles || []).map(profile => {
               return m;
             });
 
-            // Process all rounds to lock in finished games
+// Process all rounds to lock in finished games
             let simChamp = null;
             const processRound = (apiStageMatches: any[], roundStr: string) => {
-                const roundMatches = dynamicMatches.filter((m: any) => m.round === roundStr);
-                apiStageMatches.forEach((apiM, index) => {
-                    const matchToUpdate = roundMatches[index];
+                apiStageMatches.forEach((apiM) => {
+                    const rawHome = apiM.homeTeam?.name;
+                    const rawAway = apiM.awayTeam?.name;
+                    if (!rawHome || !rawAway) return;
+
+                    const tHome = API_MAP[rawHome] || rawHome;
+                    const tAway = API_MAP[rawAway] || rawAway;
+
+                    // Match the API game to our bracket slot by finding the exact pair of teams
+                    const matchToUpdate = dynamicMatches.find((m: any) => 
+                        m.round === roundStr && (
+                            (m.teamA === tHome && m.teamB === tAway) || 
+                            (m.teamA === tAway && m.teamB === tHome)
+                        )
+                    );
+
                     if (matchToUpdate) {
-                        const tA = apiM.homeTeam?.name; const tB = apiM.awayTeam?.name;
-                        if (tA) matchToUpdate.teamA = API_MAP[tA] || tA;
-                        if (tB) matchToUpdate.teamB = API_MAP[tB] || tB;
+                        // Ensure API home/away scores map correctly to bracket top(A)/bottom(B) slots
+                        const isHomeTeamA = matchToUpdate.teamA === tHome;
+                        
+                        const homeScore = apiM.score?.fullTime?.home ?? 0;
+                        const awayScore = apiM.score?.fullTime?.away ?? 0;
+                        const homePens = apiM.score?.penalties?.home;
+                        const awayPens = apiM.score?.penalties?.away;
 
                         if (apiM.status === 'FINISHED') {
                             matchToUpdate.isFinished = true;
-                            matchToUpdate.scoreA = apiM.score?.fullTime?.home ?? 0;
-                            matchToUpdate.scoreB = apiM.score?.fullTime?.away ?? 0;
-                            matchToUpdate.penaltiesA = apiM.score?.penalties?.home;
-                            matchToUpdate.penaltiesB = apiM.score?.penalties?.away;
+                            matchToUpdate.scoreA = isHomeTeamA ? homeScore : awayScore;
+                            matchToUpdate.scoreB = isHomeTeamA ? awayScore : homeScore;
+                            matchToUpdate.penaltiesA = isHomeTeamA ? homePens : awayPens;
+                            matchToUpdate.penaltiesB = isHomeTeamA ? awayPens : homePens;
 
                             let winnerName = null;
-                            if (apiM.score?.winner === 'HOME_TEAM') winnerName = apiM.homeTeam?.name;
-                            else if (apiM.score?.winner === 'AWAY_TEAM') winnerName = apiM.awayTeam?.name;
+                            if (apiM.score?.winner === 'HOME_TEAM') winnerName = tHome;
+                            else if (apiM.score?.winner === 'AWAY_TEAM') winnerName = tAway;
 
                             if (winnerName) {
-                                const formattedWinner = API_MAP[winnerName] || winnerName;
-                                matchToUpdate.winner = formattedWinner;
-                                matchToUpdate.actualWinner = formattedWinner;
+                                matchToUpdate.winner = winnerName;
+                                matchToUpdate.actualWinner = winnerName;
 
+                                // Push real winner into the next round's slot
                                 if (matchToUpdate.nextMatchId) {
                                     const nextM = dynamicMatches.find((m: any) => m.id === matchToUpdate.nextMatchId);
                                     if (nextM) {
-                                        if (matchToUpdate.slot === 'home') nextM.teamA = formattedWinner;
-                                        else nextM.teamB = formattedWinner;
+                                        if (matchToUpdate.slot === 'home') nextM.teamA = winnerName;
+                                        else nextM.teamB = winnerName;
                                     }
                                 } else if (roundStr === 'F') {
-                                    simChamp = formattedWinner;
+                                    simChamp = winnerName;
                                 }
                             }
                         } else if (apiM.status === 'IN_PLAY' || apiM.status === 'PAUSED') {
                             matchToUpdate.isLive = true;
-                            matchToUpdate.scoreA = apiM.score?.fullTime?.home ?? 0;
-                            matchToUpdate.scoreB = apiM.score?.fullTime?.away ?? 0;
+                            matchToUpdate.scoreA = isHomeTeamA ? homeScore : awayScore;
+                            matchToUpdate.scoreB = isHomeTeamA ? awayScore : homeScore;
                         }
                     }
                 });
