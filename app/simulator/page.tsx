@@ -89,18 +89,34 @@ export default function Simulator() {
           });
         }
 
-        const initialScores = (profiles || []).map(profile => {
+const initialScores = (profiles || []).map(profile => {
           let p1Points = 0;
           const userP1 = p1Picks?.filter(p => p.user_id === profile.id) || [];
+          
           userP1.forEach(pick => {
             const liveTeamData = currentStandings[pick.team_name];
             if (!liveTeamData) return;
+
+            // 1. ADVANCING POINTS (+3)
             const isActuallyAdvancing = liveTeamData.rank === 1 || liveTeamData.rank === 2 || advancingThirdPlace.includes(pick.team_name);
             const userPredictedAdvance = ['1', '2', '3Q'].includes(pick.placement);
-            if (userPredictedAdvance && isActuallyAdvancing) p1Points += 3;
-            let predictedNumericRank = parseInt(pick.placement.replace('Q', ''));
-            if (predictedNumericRank === liveTeamData.rank) p1Points += 1;
+
+            if (userPredictedAdvance && isActuallyAdvancing) { 
+              p1Points += 3; 
+            }
+            
+            // 2. STRICT EXACT PLACEMENT POINTS (+1 for ADVANCING TEAMS ONLY)
+            let actualPlacementString = liveTeamData.rank.toString();
+            if (liveTeamData.rank === 3) {
+              actualPlacementString = advancingThirdPlace.includes(pick.team_name) ? '3Q' : '3';
+            }
+
+            // Must match the exact string AND the team must actually be advancing
+            if (pick.placement === actualPlacementString && isActuallyAdvancing) { 
+              p1Points += 1; 
+            }
           });
+
           return { id: profile.id, name: profile.display_name || 'Unnamed', p1Points };
         });
         setBaseScores(initialScores);
