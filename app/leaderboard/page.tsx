@@ -105,19 +105,19 @@ const buildLeaderboard = async () => {
               correctAdvancing += 1; 
             }
             
-            // 2. STRICT EXACT PLACEMENT POINTS (+1)
-            // Format the API's actual result into Ted's exact strings ('1', '2', '3Q', '3', '4')
+            // 2. STRICT EXACT PLACEMENT POINTS (+1 for ADVANCING TEAMS ONLY)
             let actualPlacementString = liveTeamData.rank.toString();
             if (liveTeamData.rank === 3) {
               actualPlacementString = advancingThirdPlace.includes(pick.team_name) ? '3Q' : '3';
             }
 
-            // Enforce perfect string comparison (e.g., '3Q' must match '3Q', it fails if API says '3')
-            if (pick.placement === actualPlacementString) { 
+            // Must match the exact string AND the team must actually be advancing
+            if (pick.placement === actualPlacementString && isActuallyAdvancing) { 
               p1Points += 1; 
               exactPlacements += 1; 
             }
           });
+          
 
           const PHASE_2_WEIGHTS: Record<string, number> = {
             'R32': 3, 'R16': 7, 'QF': 15, 'SF': 20, 'CHAMPION': 25 
