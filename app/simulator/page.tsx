@@ -6,60 +6,34 @@ import { API_TO_COMMON_MAP as API_MAP, INITIAL_KNOCKOUT_MATCHES, assignThirdPlac
 export const dynamic = 'force-dynamic';
 
 const TEAM_ELOS: Record<string, number> = {
-  'Argentina': 2148,
-  'Spain': 2144,
-  'France': 2123,
-  'England': 2038,
-  'Brazil': 2031,
-  'Colombia': 2004,
-  'Portugal': 1990,
-  'Netherlands': 1971,
-  'Norway': 1918,
-  'Switzerland': 1914,
-  'Mexico': 1912,
-  'Germany': 1908,
-  'Croatia': 1905,
-  'Ecuador': 1902,
-  'Japan': 1888,
-  'Morocco': 1886,
-  'Belgium': 1884,
-  'Turkey': 1852,
-  'Senegal': 1842,
-  'Uruguay': 1841,
-  'Austria': 1836,
-  'Paraguay': 1823,
-  'Australia': 1800,
-  'Algeria': 1785,
-  'United States': 1781,
-  'Iran': 1764,
-  'Canada': 1764,
-  'Scotland': 1745,
-  'Ivory Coast': 1743,
-  'Sweden': 1742,
-  'Egypt': 1742,
-  'South Korea': 1723,
-  'DR Congo': 1712,
-  'Czechia': 1680,
-  'Panama': 1658,
-  'Uzbekistan': 1631,
-  'Jordan': 1628,
-  'Bosnia and Herzegovina': 1622,
-  'Bosnia & Herzegovina': 1622, 
-  'Bosnia & Herzigovina': 1622,
-  'Cape Verde': 1622,
-  'Saudi Arabia': 1596,
-  'Ghana': 1575,
-  'Tunisia': 1562,
-  'Iraq': 1561,
-  'South Africa': 1559,
-  'New Zealand': 1534,
-  'Haiti': 1517,
-  'Curaçao': 1438,
-  'Curacao': 1438,
-  'Qatar': 1411
+  'Argentina': 2148, 'Spain': 2144, 'France': 2123, 'England': 2038, 'Brazil': 2031,
+  'Colombia': 2004, 'Portugal': 1990, 'Netherlands': 1971, 'Norway': 1918,
+  'Switzerland': 1914, 'Mexico': 1912, 'Germany': 1908, 'Croatia': 1905,
+  'Ecuador': 1902, 'Japan': 1888, 'Morocco': 1886, 'Belgium': 1884, 'Turkey': 1852,
+  'Senegal': 1842, 'Uruguay': 1841, 'Austria': 1836, 'Paraguay': 1823,
+  'Australia': 1800, 'Algeria': 1785, 'United States': 1781, 'Iran': 1764,
+  'Canada': 1764, 'Scotland': 1745, 'Ivory Coast': 1743, 'Sweden': 1742,
+  'Egypt': 1742, 'South Korea': 1723, 'DR Congo': 1712, 'Czechia': 1680,
+  'Panama': 1658, 'Uzbekistan': 1631, 'Jordan': 1628, 'Bosnia and Herzegovina': 1622,
+  'Bosnia & Herzegovina': 1622, 'Bosnia & Herzigovina': 1622, 'Cape Verde': 1622,
+  'Saudi Arabia': 1596, 'Ghana': 1575, 'Tunisia': 1562, 'Iraq': 1561,
+  'South Africa': 1559, 'New Zealand': 1534, 'Haiti': 1517, 'Curaçao': 1438,
+  'Curacao': 1438, 'Qatar': 1411
 };
 
 const getElo = (team: string) => TEAM_ELOS[team] || 1400;
+
+// Defines point values based on reaching a specific round
+const PHASE_2_WEIGHTS: Record<string, number> = { 'R16': 3, 'QF': 7, 'SF': 15, 'F': 20, 'CHAMPION': 25 };
+
+// Translates a predicted achievement into the match that MUST be won to achieve it
+const ROUND_TO_MATCH_MAP: Record<string, string> = { 
+  'R16': 'R32', 
+  'QF': 'R16', 
+  'SF': 'QF', 
+  'F': 'SF', 
+  'CHAMPION': 'CHAMPION' 
+};
 
 export default function Simulator() {
   const [loading, setLoading] = useState(true);
@@ -70,7 +44,7 @@ export default function Simulator() {
   
   // Projection Data
   const [allPhase2Picks, setAllPhase2Picks] = useState<any[]>([]);
-  const [baseScores, setBaseScores] = useState<any[]>([]); // Group Stage actuals
+  const [baseScores, setBaseScores] = useState<any[]>([]); 
   const [projectedLeaderboard, setProjectedLeaderboard] = useState<any[]>([]);
 
   // Win Probability States
@@ -78,12 +52,9 @@ export default function Simulator() {
   const [isCalculatingProbs, setIsCalculatingProbs] = useState(false);
   const [simProgress, setSimProgress] = useState<number | null>(null);
   
-  const PHASE_2_WEIGHTS: Record<string, number> = { 'R32': 3, 'R16': 7, 'QF': 15, 'SF': 20, 'CHAMPION': 25 };
-
   useEffect(() => {
     const initializeSimulator = async () => {
       let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));      
-
       const groupRanks: Record<string, string[]> = {};
 
       try {
@@ -95,7 +66,18 @@ export default function Simulator() {
           supabase.from('phase_2_picks').select('user_id, team_name, predicted_round').limit(10000)
         ]);
 
-        if (p2Picks) setAllPhase2Picks(p2Picks);
+        if (p2Picks) {
+          // --- MISSING FINALS AUTO-PATCH ---
+          // Silently injects an 'F' pick for any team designated as 'CHAMPION'
+          const enrichedPicks = [...p2Picks];
+          const champPicks = p2Picks.filter((p: any) => p.predicted_round === 'CHAMPION');
+          
+          champPicks.forEach((cp: any) => {
+            const hasF = p2Picks.some((p: any) => p.user_id === cp.user_id && p.predicted_round === 'F' && p.team_name === cp.team_name);
+            if (!hasF) enrichedPicks.push({ ...cp, predicted_round: 'F' });
+          });
+          setAllPhase2Picks(enrichedPicks);
+        }
 
         let currentStandings: Record<string, { rank: number }> = {};
         let advancingThirdPlace: string[] = [];
@@ -179,7 +161,6 @@ export default function Simulator() {
         });
         setBaseScores(initialScores);
 
-        // Anchor Overwrite for Simulator
         if (matchesRes.ok) {
           const mData = await matchesRes.json();
           if (mData.matches && mData.matches.length > 0) {
@@ -188,8 +169,8 @@ export default function Simulator() {
             
             const R32_ANCHORS: Record<number, string> = {
               1: groupRanks['E']?.[0], 2: groupRanks['I']?.[0], 3: groupRanks['A']?.[1], 4: groupRanks['F']?.[0],
-              5: groupRanks['C']?.[0], 6: groupRanks['E']?.[1], 7: groupRanks['A']?.[0], 8: groupRanks['L']?.[0],
-              9: groupRanks['K']?.[1], 10: groupRanks['H']?.[0], 11: groupRanks['D']?.[0], 12: groupRanks['G']?.[0],
+              5: groupRanks['K']?.[1], 6: groupRanks['H']?.[0], 7: groupRanks['D']?.[0], 8: groupRanks['G']?.[0],
+              9: groupRanks['C']?.[0], 10: groupRanks['E']?.[1], 11: groupRanks['A']?.[0], 12: groupRanks['L']?.[0],
               13: groupRanks['J']?.[0], 14: groupRanks['D']?.[1], 15: groupRanks['B']?.[0], 16: groupRanks['K']?.[0],
             };
 
@@ -214,7 +195,6 @@ export default function Simulator() {
               return m;
             });
 
-            // Process all rounds to lock in finished games
             let simChamp = null;
             const processRound = (apiStageMatches: any[], roundStr: string) => {
                 apiStageMatches.forEach((apiM) => {
@@ -303,10 +283,12 @@ export default function Simulator() {
         const round = pick.predicted_round;
         const pts = PHASE_2_WEIGHTS[round];
         if (pts) {
-          if (round === 'CHAMPION') {
+          const matchRequiredToWin = ROUND_TO_MATCH_MAP[round];
+          
+          if (matchRequiredToWin === 'CHAMPION') {
             if (champion === pick.team_name) p2Points += pts;
-          } else {
-            const matchWon = matches.find(m => m.round === round && m.winner === pick.team_name);
+          } else if (matchRequiredToWin) {
+            const matchWon = matches.find(m => m.round === matchRequiredToWin && m.winner === pick.team_name);
             if (matchWon) p2Points += pts;
           }
         }
@@ -318,7 +300,6 @@ export default function Simulator() {
     projected.sort((a, b) => b.projectedTotal - a.projectedTotal);
     setProjectedLeaderboard(projected);
     
-    // Clear probabilities if the user changes the board manually
     setWinProbs(null); 
   }, [matches, champion, baseScores, allPhase2Picks]);
 
@@ -395,7 +376,6 @@ export default function Simulator() {
     setIsCalculatingProbs(true);
     setSimProgress(0);
 
-    // Pre-process data OUTSIDE the loop for maximum speed
     const ITERATIONS = 10000;
     const CHUNK_SIZE = 500;
     let currentIteration = 0;
@@ -403,27 +383,27 @@ export default function Simulator() {
     const tallies: Record<string, number> = {};
     baseScores.forEach(u => tallies[u.id] = 0);
 
-    // Fast user pick dictionary (O(1) lookups)
     const userPicksFast = baseScores.map(user => {
       return {
         id: user.id,
         basePts: user.p1Points,
         picks: allPhase2Picks
           .filter(p => p.user_id === user.id)
-          .map(p => ({
-            key: p.team_name + '_' + p.predicted_round,
-            pts: PHASE_2_WEIGHTS[p.predicted_round] || 0
-          }))
+          .map(p => {
+            const targetMatch = ROUND_TO_MATCH_MAP[p.predicted_round];
+            return {
+              key: targetMatch ? p.team_name + '_' + targetMatch : '',
+              pts: PHASE_2_WEIGHTS[p.predicted_round] || 0
+            };
+          }).filter(p => p.key !== '')
       };
     });
 
-    // Isolate unresolved matches and sort chronologically
     const roundOrder: Record<string, number> = { 'R32': 1, 'R16': 2, 'QF': 3, 'SF': 4, 'F': 5 };
     const unresolvedMatches = matches
       .filter((m: any) => !m.isFinished)
       .sort((a: any, b: any) => roundOrder[a.round] - roundOrder[b.round]);
 
-    // Pre-calculate finished matches' actual results
     const baselineResults: Record<string, boolean> = {};
     matches.forEach((m: any) => {
       if (m.isFinished && m.actualWinner) {
@@ -432,12 +412,10 @@ export default function Simulator() {
       }
     });
 
-    // The Async Chunk Processor
     const processChunk = () => {
       const end = Math.min(currentIteration + CHUNK_SIZE, ITERATIONS);
 
       for (; currentIteration < end; currentIteration++) {
-        // Clone the baseline results for this single iteration
         const simResults = { ...baselineResults };
         const dynamicTeams: Record<string, string> = {};
 
@@ -459,7 +437,6 @@ export default function Simulator() {
             simResults[winner + '_' + match.round] = true;
             if (match.round === 'F') simResults[winner + '_CHAMPION'] = true;
 
-            // Pass winner dynamically to next round's slot
             if (match.nextMatchId) {
               const slotKey = match.nextMatchId + (match.slot === 'home' ? '_A' : '_B');
               dynamicTeams[slotKey] = winner;
@@ -467,7 +444,6 @@ export default function Simulator() {
           }
         });
 
-        // Score Users against this iteration's outcome
         let maxScore = -1;
         let iterationWinners: string[] = [];
 
@@ -492,13 +468,10 @@ export default function Simulator() {
         }
       }
 
-      // Progress Check
       if (currentIteration < ITERATIONS) {
-        // Yield to main thread to update UI, then queue next chunk
         setSimProgress(Math.round((currentIteration / ITERATIONS) * 100));
         setTimeout(processChunk, 0); 
       } else {
-        // Finalize calculations
         const percentages: Record<string, string> = {};
         Object.keys(tallies).forEach(id => {
           const pct = (tallies[id] / ITERATIONS) * 100;
@@ -511,7 +484,6 @@ export default function Simulator() {
       }
     };
 
-    // Kick off the first chunk
     setTimeout(processChunk, 0);
   };
 
@@ -593,10 +565,7 @@ export default function Simulator() {
           </div>
         </header>
 
-        {/* Layout Grid: Bracket on Top, Leaderboard Below */}
         <div className="space-y-10">
-          
-          {/* BRACKET SECTION */}
           <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4 shadow-2xl">
             <div className="flex space-x-6 sm:space-x-8 overflow-x-auto pb-6 items-start hide-scrollbar">
               {renderRound('R32', 'Round of 32')}
@@ -616,7 +585,6 @@ export default function Simulator() {
             </div>
           </div>
 
-          {/* PROJECTED LEADERBOARD SECTION */}
           <div className="max-w-3xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
             
             <div className="bg-sky-950/30 border-b border-sky-500/20 p-4 flex flex-col sm:flex-row justify-between items-center">
