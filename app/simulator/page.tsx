@@ -59,10 +59,6 @@ const TEAM_ELOS: Record<string, number> = {
   'Qatar': 1411
 };
 
-// Win Probability States
-  const [winProbs, setWinProbs] = useState<Record<string, string> | null>(null);
-  const [isCalculatingProbs, setIsCalculatingProbs] = useState(false);
-  const [simProgress, setSimProgress] = useState<number | null>(null); // ADD THIS LINE
 const getElo = (team: string) => TEAM_ELOS[team] || 1400;
 
 export default function Simulator() {
@@ -80,6 +76,7 @@ export default function Simulator() {
   // Win Probability States
   const [winProbs, setWinProbs] = useState<Record<string, string> | null>(null);
   const [isCalculatingProbs, setIsCalculatingProbs] = useState(false);
+  const [simProgress, setSimProgress] = useState<number | null>(null);
   
   const PHASE_2_WEIGHTS: Record<string, number> = { 'R32': 3, 'R16': 7, 'QF': 15, 'SF': 20, 'CHAMPION': 25 };
 
@@ -394,7 +391,7 @@ export default function Simulator() {
     });
   };
 
-const calculateWinProbabilities = () => {
+  const calculateWinProbabilities = () => {
     setIsCalculatingProbs(true);
     setSimProgress(0);
 
