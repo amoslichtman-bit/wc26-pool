@@ -75,7 +75,18 @@ export default function Home() {
       if (profileData) setProfiles(profileData);
 
       const { data: allPicksData } = await supabase.from('phase_2_picks').select('*').limit(10000);
-      if (allPicksData) setAllPhase2Picks(allPicksData);
+      if (allPicksData) {
+        // --- MISSING FINALS AUTO-PATCH ---
+        // Silently injects an 'F' pick for any team designated as 'CHAMPION'
+        const enrichedPicks = [...allPicksData];
+        const champPicks = allPicksData.filter((p: any) => p.predicted_round === 'CHAMPION');
+        
+        champPicks.forEach((cp: any) => {
+          const hasF = allPicksData.some((p: any) => p.user_id === cp.user_id && p.predicted_round === 'F' && p.team_name === cp.team_name);
+          if (!hasF) enrichedPicks.push({ ...cp, predicted_round: 'F' });
+        });
+        setAllPhase2Picks(enrichedPicks);
+      }
 
       let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
       const groupRanks: Record<string, string[]> = {};
@@ -140,12 +151,28 @@ export default function Home() {
             
             const r32Matches = data.matches.filter((m: any) => m.stage === 'LAST_32');
             
-            // Map the undisputed positions to their specific updated index structures matching Wikipedia
+            // --- TOPOLOGY FIX --- 
+            // Swapped slots 5-8 with 9-12 to align with official FIFA routing rules
             const R32_ANCHORS: Record<number, string> = {
-              1: groupRanks['E']?.[0], 2: groupRanks['I']?.[0], 3: groupRanks['A']?.[1], 4: groupRanks['F']?.[0],
-              5: groupRanks['C']?.[0], 6: groupRanks['E']?.[1], 7: groupRanks['A']?.[0], 8: groupRanks['L']?.[0],
-              9: groupRanks['K']?.[1], 10: groupRanks['H']?.[0], 11: groupRanks['D']?.[0], 12: groupRanks['G']?.[0],
-              13: groupRanks['J']?.[0], 14: groupRanks['D']?.[1], 15: groupRanks['B']?.[0], 16: groupRanks['K']?.[0],
+              1: groupRanks['E']?.[0], 
+              2: groupRanks['I']?.[0], 
+              3: groupRanks['A']?.[1], 
+              4: groupRanks['F']?.[0],
+              
+              5: groupRanks['K']?.[1], 
+              6: groupRanks['H']?.[0], 
+              7: groupRanks['D']?.[0], 
+              8: groupRanks['G']?.[0],
+              
+              9: groupRanks['C']?.[0], 
+              10: groupRanks['E']?.[1], 
+              11: groupRanks['A']?.[0], 
+              12: groupRanks['L']?.[0],
+              
+              13: groupRanks['J']?.[0], 
+              14: groupRanks['D']?.[1], 
+              15: groupRanks['B']?.[0], 
+              16: groupRanks['K']?.[0],
             };
 
             dynamicMatches = dynamicMatches.map((m: any) => {
