@@ -3,6 +3,61 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { API_TO_COMMON_MAP as API_MAP, INITIAL_KNOCKOUT_MATCHES, assignThirdPlaceTeams } from '../../lib/constants';
+const TEAM_ELOS: Record<string, number> = {
+  'Argentina': 2148,
+  'Spain': 2144,
+  'France': 2123,
+  'England': 2038,
+  'Brazil': 2031,
+  'Colombia': 2004,
+  'Portugal': 1990,
+  'Netherlands': 1971,
+  'Norway': 1918,
+  'Switzerland': 1914,
+  'Mexico': 1912,
+  'Germany': 1908,
+  'Croatia': 1905,
+  'Ecuador': 1902,
+  'Japan': 1888,
+  'Morocco': 1886,
+  'Belgium': 1884,
+  'Turkey': 1852,
+  'Senegal': 1842,
+  'Uruguay': 1841,
+  'Austria': 1836,
+  'Paraguay': 1823,
+  'Australia': 1800,
+  'Algeria': 1785,
+  'United States': 1781,
+  'Iran': 1764,
+  'Canada': 1764,
+  'Scotland': 1745,
+  'Ivory Coast': 1743,
+  'Sweden': 1742,
+  'Egypt': 1742,
+  'South Korea': 1723,
+  'DR Congo': 1712,
+  'Czechia': 1680,
+  'Panama': 1658,
+  'Uzbekistan': 1631,
+  'Jordan': 1628,
+  'Bosnia and Herzegovina': 1622,
+  'Bosnia & Herzegovina': 1622, 
+  'Bosnia & Herzigovina': 1622, // Handled for spreadsheet typo
+  'Cape Verde': 1622,
+  'Saudi Arabia': 1596,
+  'Ghana': 1575,
+  'Tunisia': 1562,
+  'Iraq': 1561,
+  'South Africa': 1559,
+  'New Zealand': 1534,
+  'Haiti': 1517,
+  'Curaçao': 1438,
+  'Curacao': 1438,
+  'Qatar': 1411
+};
+
+const getElo = (team: string) => TEAM_ELOS[team] || 1400;
 export const dynamic = 'force-dynamic';
 
 export default function Simulator() {
@@ -349,42 +404,70 @@ export default function Simulator() {
     });
   };
 
-  const calculateWinProbabilities = () => {
+ const calculateWinProbabilities = () => {
     setIsCalculatingProbs(true);
 
-    // Yield to the main thread briefly so the button can show a "loading" state
     setTimeout(() => {
+      const ITERATIONS = 10000;
       const tallies: Record<string, number> = {};
       baseScores.forEach(u => tallies[u.id] = 0);
-      let totalScenarios = 0;
 
-      // Create a clean bracket strictly from REALITY (ignoring user simulator clicks)
-      const bracket = JSON.parse(JSON.stringify(matches)).map((m: any) => ({
+      // Clean bracket strictly from REALITY
+      const baseBracket = JSON.parse(JSON.stringify(matches)).map((m: any) => ({
         ...m,
-        winner: m.isFinished ? m.actualWinner : null,
-        simWinner: m.isFinished ? m.actualWinner : null
+        winner: m.isFinished ? m.actualWinner : null
       }));
 
-      // Failsafe: Browser will crash if we try to simulate 2 billion scenarios from the R32
-      const unresolvedCount = bracket.filter((m: any) => !m.isFinished).length;
-      if (unresolvedCount > 15) {
-         alert("Too many matches remaining to calculate locally (over 2 billion scenarios). Please wait until the Round of 16 to run probabilities.");
-         setIsCalculatingProbs(false);
-         return;
-      }
+      // Topologically sort matches to ensure R32 finishes before R16, etc.
+      const roundOrder: Record<string, number> = { 'R32': 1, 'R16': 2, 'QF': 3, 'SF': 4, 'F': 5 };
+      const sortedBracket = baseBracket.sort((a: any, b: any) => roundOrder[a.round] - roundOrder[b.round]);
 
-      // Evaluator: Scores all users against one specific completed scenario
-      const evaluateBracket = () => {
+      for (let i = 0; i < ITERATIONS; i++) {
+        // Fast shallow copy for this specific iteration
+        const simBracket = sortedBracket.map((m: any) => ({ ...m }));
+        const matchMap = new Map();
+        simBracket.forEach((m: any) => matchMap.set(m.id, m));
+
         const actualResults: Record<string, string[]> = { 'R32': [], 'R16': [], 'QF': [], 'SF': [], 'CHAMPION': [] };
-        bracket.forEach((m: any) => {
-          if (m.winner) {
-            actualResults[m.round].push(m.winner);
-            if (m.round === 'F') actualResults['CHAMPION'].push(m.winner);
+
+        simBracket.forEach((match: any) => {
+          let winner = match.winner;
+          
+          if (!winner) {
+            const teamA = match.teamA;
+            const teamB = match.teamB;
+
+            if (teamA && teamB && !teamA.includes('Place') && !teamB.includes('Place')) {
+              // Standard Elo Probability Math
+              const eloA = getElo(teamA);
+              const eloB = getElo(teamB);
+              const probA = 1 / (1 + Math.pow(10, (eloB - eloA) / 400));
+              
+              winner = Math.random() < probA ? teamA : teamB;
+            } else {
+              // Fallback for unresolved placeholder slots
+              winner = Math.random() < 0.5 ? teamA : teamB; 
+            }
+          }
+
+          if (winner) {
+            actualResults[match.round].push(winner);
+            if (match.round === 'F') actualResults['CHAMPION'].push(winner);
+            
+            // Push simulated winner to the next round
+            if (match.nextMatchId) {
+              const nextM = matchMap.get(match.nextMatchId);
+              if (nextM) {
+                if (match.slot === 'home') nextM.teamA = winner;
+                else nextM.teamB = winner;
+              }
+            }
           }
         });
 
+        // Score the pool against this iteration's bracket
         let maxScore = -1;
-        let winners: string[] = [];
+        let iterationWinners: string[] = [];
 
         baseScores.forEach(user => {
           let p2Pts = 0;
@@ -399,62 +482,20 @@ export default function Simulator() {
           
           if (total > maxScore) {
             maxScore = total;
-            winners = [user.id];
+            iterationWinners = [user.id];
           } else if (total === maxScore) {
-            winners.push(user.id); 
+            iterationWinners.push(user.id); 
           }
         });
 
-        winners.forEach(id => tallies[id] += 1);
-        totalScenarios++;
-      };
+        // Credit the winner(s) of this iteration
+        iterationWinners.forEach(id => tallies[id] += 1);
+      }
 
-      // The Recursive Backtracking algorithm
-      const branchMatch = () => {
-        const nextMatchIndex = bracket.findIndex((m: any) => !m.isFinished && !m.simWinner);
-
-        if (nextMatchIndex === -1) {
-          evaluateBracket();
-          return;
-        }
-
-        const match = bracket[nextMatchIndex];
-        const teamA = match.teamA;
-        const teamB = match.teamB;
-
-        if (!teamA || !teamB || teamA.includes('Place') || teamB.includes('Place')) {
-          match.simWinner = 'TBD';
-          branchMatch();
-          match.simWinner = null;
-          return;
-        }
-
-        const nextM = match.nextMatchId ? bracket.find((m: any) => m.id === match.nextMatchId) : null;
-        const originalNextTeam = nextM ? (match.slot === 'home' ? nextM.teamA : nextM.teamB) : null;
-
-        // BRANCH 1: Team A Wins
-        match.simWinner = teamA;
-        match.winner = teamA;
-        if (nextM) { if (match.slot === 'home') nextM.teamA = teamA; else nextM.teamB = teamA; }
-        branchMatch();
-
-        // BRANCH 2: Team B Wins
-        match.simWinner = teamB;
-        match.winner = teamB;
-        if (nextM) { if (match.slot === 'home') nextM.teamA = teamB; else nextM.teamB = teamB; }
-        branchMatch();
-
-        // REVERT / BACKTRACK (Clears memory for the next branch)
-        match.simWinner = null;
-        match.winner = null;
-        if (nextM) { if (match.slot === 'home') nextM.teamA = originalNextTeam; else nextM.teamB = originalNextTeam; }
-      };
-
-      branchMatch();
-
+      // Convert tallies to percentages
       const percentages: Record<string, string> = {};
       Object.keys(tallies).forEach(id => {
-        const pct = (tallies[id] / totalScenarios) * 100;
+        const pct = (tallies[id] / ITERATIONS) * 100;
         percentages[id] = pct < 0.1 && pct > 0 ? '<0.1' : pct.toFixed(1);
       });
 
@@ -491,21 +532,12 @@ export default function Simulator() {
             }
 
             return (
-              <button
-                onClick={() => handlePick(match.id, teamName)}
-                disabled={match.isFinished || !teamName}
-                className={`w-full flex justify-between items-center p-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${btnClass}`}
+<button 
+                onClick={calculateWinProbabilities}
+                disabled={isCalculatingProbs}
+                className="mt-3 sm:mt-0 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-4 py-2 rounded-full transition-colors disabled:opacity-50 w-full sm:w-auto"
               >
-                <div className="flex flex-col items-start truncate">
-                  <span className={`truncate pr-2 ${isRealLoser ? 'line-through text-slate-500' : ''}`}>{teamName || 'TBD'}</span>
-                  {match.isLive && <span className="text-[9px] text-red-500 font-bold uppercase tracking-widest animate-pulse mt-0.5">Live</span>}
-                </div>
-                
-                {(match.isFinished || match.isLive) && slotScore !== undefined && slotScore !== null && (
-                  <div className={`font-mono text-sm px-2 py-0.5 rounded ${isRealWinner ? 'bg-emerald-950 text-emerald-400' : 'bg-slate-950 text-slate-500'}`}>
-                    {slotScore} {slotPens !== undefined && <span className="text-[9px] ml-1">({slotPens})</span>}
-                  </div>
-                )}
+                {isCalculatingProbs ? 'Running 10,000 Simulations...' : 'Calculate Win % (Elo Monte Carlo)'}
               </button>
             );
           };
