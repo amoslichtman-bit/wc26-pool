@@ -14,7 +14,6 @@ export default function Phase1Picks() {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [allPicks, setAllPicks] = useState<Record<string, Record<string, string>>>({});
   const [picks, setPicks] = useState<{ [team: string]: string }>({});
-  // Added gf (Goals For) to state type
   const [liveStandings, setLiveStandings] = useState<{ [team: string]: { w: number, d: number, l: number, pts: number, gd: number, gf: number } }>({});
   
   // View & Security States
@@ -176,7 +175,9 @@ export default function Phase1Picks() {
     const targetUserIdToSave = isViewingOther && currentUserIsAdmin && adminEditMode ? viewingUserId : user.id;
 
     const confirmSubmit = window.confirm(
-      "Are you ready to lock in your Group Stage Bracket? Once submitted, your picks cannot be changed."
+      isViewingOther 
+        ? `Are you sure you want to write and overwrite administrative updates directly to ${activeProfile?.display_name || 'this user'}'s bracket database file?`
+        : "Are you ready to lock in your Group Stage Bracket? Once submitted, your picks cannot be changed."
     );
     
     if (!confirmSubmit) return;
@@ -196,15 +197,18 @@ export default function Phase1Picks() {
         if (error) throw error;
       }
       
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ group_picks_submitted: true, is_locked: true })
-        .eq('id', targetUserIdToSave);
+      // Only lock the profile if it is a regular user submitting their own bracket
+      if (!isViewingOther) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ group_picks_submitted: true, is_locked: true })
+          .eq('id', targetUserIdToSave);
 
-      if (profileError) throw profileError;
+        if (profileError) throw profileError;
+        setIsLocked(true);
+      }
 
       setAllPicks(prev => ({ ...prev, [targetUserIdToSave]: picks }));
-      setIsLocked(true);
       setSaveStatus('success');
       
     } catch (err) {
@@ -245,7 +249,6 @@ export default function Phase1Picks() {
   });
   
   const actual3QTeams = new Set(allThirdPlaceTeams.slice(0, 8));
-  // ----------------------------------------------
 
   return (
     <main className="min-h-screen p-4 sm:p-8 bg-slate-950 text-slate-200 font-sans pb-32">
@@ -321,26 +324,20 @@ export default function Phase1Picks() {
                   let selectColorClasses = 'border-slate-700 text-white';
 
                   if (currentPick) {
-                    // 1. Determine the team's actual placement string based on live standings
                     let actualPlacement = '';
                     if (index === 0) actualPlacement = '1';
                     else if (index === 1) actualPlacement = '2';
                     else if (index === 2) actualPlacement = actual3QTeams.has(team) ? '3Q' : '3';
                     else if (index === 3) actualPlacement = '4';
 
-                    // 2. Determine advancement outcomes (Round of 32)
                     const predictedAdvances = ['1', '2', '3Q'].includes(currentPick);
                     const actualAdvances = ['1', '2', '3Q'].includes(actualPlacement);
 
-                    // 3. Assign dynamic classes based on match logic
                     if (currentPick === actualPlacement) {
-                      // Correctly Placed (Green)
                       selectColorClasses = 'border-emerald-500 text-emerald-400 font-bold bg-emerald-950/30';
                     } else if (predictedAdvances === actualAdvances) {
-                      // Correct on outcome (advancement/elimination), but wrong placement (Yellow)
                       selectColorClasses = 'border-yellow-500 text-yellow-400 font-bold bg-yellow-950/30';
                     } else {
-                      // Incorrect on advancement outcome (Red)
                       selectColorClasses = 'border-red-500 text-red-400 font-bold bg-red-950/30';
                     }
                   }
@@ -348,9 +345,7 @@ export default function Phase1Picks() {
                   return (
                     <div key={team} className="flex flex-col justify-center bg-slate-950 p-3 rounded-lg border border-slate-800/50">
                       <div className="flex justify-between items-center mb-2">
-                        {/* Larger team name font */}
                         <span className="font-bold text-slate-100 text-base md:text-lg truncate pr-2">{team}</span>
-                        {/* Enlarged select input with dynamic color classes */}
                         <select 
                           disabled={inputIsDisabled}
                           className={`bg-slate-800 border-2 rounded-lg p-2 text-sm focus:ring-emerald-500 focus:border-emerald-500 outline-none w-32 disabled:opacity-70 disabled:cursor-not-allowed transition-colors ${selectColorClasses}`}
@@ -449,15 +444,17 @@ export default function Phase1Picks() {
           </div>
         </div>
 
-        {/* Fixed Save Bar - Hidden when viewing others */}
-        {!isViewingOther && (
+        {/* Modified Save Bar Condition: Show if personal view OR admin edit mode is active */}
+        {(!isViewingOther || (currentUserIsAdmin && adminEditMode)) && (
           <div className="fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-md border-t border-slate-800 p-4 z-40">
             <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center">
               <div className="mb-3 sm:mb-0">
                 {!user ? (
                   <span className="text-red-400 font-semibold text-sm">Please log in to save your rankings.</span>
                 ) : saveStatus === 'success' ? (
-                  <span className="text-emerald-400 font-semibold text-sm animate-pulse"> Picks successfully secured and locked!</span>
+                  <span className="text-emerald-400 font-semibold text-sm animate-pulse"> Picks successfully secured in cloud database!</span>
+                ) : isViewingOther && adminEditMode ? (
+                  <span className="text-amber-400 font-semibold text-sm">🛠 Admin Overwrite Mode Active: Modifying {activeProfile?.display_name}'s bracket.</span>
                 ) : isLocked ? (
                    <span className="text-amber-400 font-semibold text-sm">🔒 Your picks are officially locked.</span>
                 ) : (
@@ -471,7 +468,11 @@ export default function Phase1Picks() {
                   isLocked && !(currentUserIsAdmin && adminEditMode) ? 'bg-slate-800 text-slate-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 }`}
               >
-                {isLocked && !(currentUserIsAdmin && adminEditMode) ? '🔒 Bracket Locked' : isSaving ? 'Locking in Database...' : 'Review & Submit Picks'}
+                {isViewingOther && adminEditMode 
+                  ? (isSaving ? 'Processing Overwrite...' : 'Save Admin Overrides') 
+                  : isLocked ? '🔒 Bracket Locked' 
+                  : isSaving ? 'Locking in Database...' 
+                  : 'Review & Submit Picks'}
               </button>
             </div>
           </div>
