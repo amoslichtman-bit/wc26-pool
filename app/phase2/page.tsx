@@ -42,7 +42,7 @@ export default function Home() {
   const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
   const [adminEditMode, setAdminEditMode] = useState(false);
 
-// Global View & Lock Logic
+  // Global View & Lock Logic
   const targetUserId = viewingUserId || user?.id;
   const isViewingOther = targetUserId && targetUserId !== user?.id;
   
@@ -85,16 +85,6 @@ export default function Home() {
         const standingsRes = await fetch('/api/standings', { cache: 'no-store' });
         if (standingsRes.ok) {
           const sData = await standingsRes.json();
-          // --- DIAGNOSTIC: Check simulated end-of-group standings ---
-          const projectedSummary = (sData.projectedStandings || []).map((g: any) => ({
-            Group: g.group.replace('GROUP_', ''),
-            FirstPlace: g.table[0]?.team?.name || '-',
-            SecondPlace: g.table[1]?.team?.name || '-',
-            ThirdPlace: `${g.table[2]?.team?.name || '-'} (${g.table[2]?.points || 0} pts)`,
-          }));
-          console.log("📊 FULL PROJECTED GROUP STAGE FINISH:");
-          console.table(projectedSummary);
-          // ----------------------------------------------------------
           const thirds: any[] = [];
           
           // CRITICAL: We grab projectedStandings so our preliminary bracket simulates realistic full 3-game group outcomes!
@@ -115,8 +105,7 @@ export default function Home() {
 
           // Run the chronological constraint solver matrix on the top 8 advancing 3rds
           const perfectAssignments = assignThirdPlaceTeams(top8Thirds);
-          console.log("🏆 TOP 8 ADVANCING THIRDS:", JSON.stringify(top8Thirds));
-          console.log("🔀 MATRIX SOLVER ASSIGNMENTS:", JSON.stringify(perfectAssignments));
+          
           dynamicMatches = dynamicMatches.map((m: any) => {
             let newA = m.teamA;
             let newB = m.teamB;
@@ -397,47 +386,63 @@ export default function Home() {
           {title}
         </h3>
         {roundMatches.map(match => {
-          const actualMatch = actualBracket.find(m => m.id === match.id);
-          const isMatchFinished = actualMatch && actualMatch.winner !== null;
-
-          const renderButtonContent = (teamName: string) => {
+          
+          const renderButtonContent = (teamName: string, slotIndex: 'teamA' | 'teamB') => {
             const isSelected = match.winner === teamName;
             const isBtnDisabled = !teamName || teamName.includes('Place') || teamName.includes('3Q') || inputIsDisabled;
+
+            const actualMatch = actualBracket.find(m => m.id === match.id);
+            const isMatchFinished = actualMatch && actualMatch.winner !== null;
+            const actualTeamForSlot = actualMatch ? actualMatch[slotIndex] : null;
+
+            // Determine if the user's team advanced to a slot they never reached in reality
+            const hasRealTeamForSlot = actualTeamForSlot && !actualTeamForSlot.includes('Place') && !actualTeamForSlot.includes('3Q');
+            const isGhostTeam = teamName && hasRealTeamForSlot && teamName !== actualTeamForSlot;
 
             let btnClass = 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-transparent';
             let content = <span className="truncate pr-2">{formatTeamName(teamName)}</span>;
 
-            if (isSelected) {
-              if (isMatchFinished) {
-                  if (actualMatch.winner === teamName) {
-                      btnClass = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50';
-                      content = (
-                          <div className="flex flex-col text-left truncate">
-                              <span className="truncate pr-2 font-bold">{formatTeamName(teamName)}</span>
-                              <span className="text-[9px] text-emerald-500 uppercase tracking-wider font-black">✓ Correct</span>
-                          </div>
-                      );
-                  } else {
-                      btnClass = 'bg-red-500/10 text-red-400 border border-red-500/30';
-                      content = (
-                          <div className="flex flex-col text-left truncate">
-                              <span className="truncate pr-2 line-through opacity-60">{formatTeamName(teamName)}</span>
-                              <span className="text-[10px] text-emerald-400 font-bold mt-0.5 leading-tight">Real: {actualMatch.winner}</span>
-                          </div>
-                      );
-                  }
-              } else if (eliminatedTeams.has(teamName)) {
-                  btnClass = 'bg-red-500/10 text-red-400 border border-red-500/30';
-                  content = (
-                      <div className="flex flex-col text-left truncate">
-                          <span className="truncate pr-2 line-through opacity-60">{formatTeamName(teamName)}</span>
-                          <span className="text-[9px] text-red-500 font-bold mt-0.5 uppercase tracking-wider">Eliminated</span>
-                      </div>
-                  );
-              } else {
-                  btnClass = 'bg-sky-500/20 text-sky-400 border border-sky-500/50 shadow-[0_0_10px_rgba(14,165,233,0.1)]';
-                  content = <span className="truncate pr-2 font-bold">{formatTeamName(teamName)}</span>;
-              }
+            if (isGhostTeam) {
+                // 1. GHOST TEAM (Team was eliminated earlier, but pushed forward by user)
+                btnClass = 'bg-red-500/10 text-red-400 border border-red-500/30';
+                content = (
+                    <div className="flex flex-col text-left truncate">
+                        <span className="truncate pr-2 line-through opacity-60">{formatTeamName(teamName)}</span>
+                        <span className="text-[10px] text-emerald-400 font-bold mt-0.5 leading-tight">Real: {formatTeamName(actualTeamForSlot)}</span>
+                    </div>
+                );
+            } else if (isSelected) {
+                // 2. SELECTED TEAM (User picked them to win THIS match)
+                if (isMatchFinished) {
+                    if (actualMatch.winner === teamName) {
+                        btnClass = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50';
+                        content = (
+                            <div className="flex flex-col text-left truncate">
+                                <span className="truncate pr-2 font-bold">{formatTeamName(teamName)}</span>
+                                <span className="text-[9px] text-emerald-500 uppercase tracking-wider font-black">✓ Correct</span>
+                            </div>
+                        );
+                    } else {
+                        btnClass = 'bg-red-500/10 text-red-400 border border-red-500/30';
+                        content = (
+                            <div className="flex flex-col text-left truncate">
+                                <span className="truncate pr-2 line-through opacity-60">{formatTeamName(teamName)}</span>
+                                <span className="text-[10px] text-emerald-400 font-bold mt-0.5 leading-tight">Real: {actualMatch.winner}</span>
+                            </div>
+                        );
+                    }
+                } else {
+                    btnClass = 'bg-sky-500/20 text-sky-400 border border-sky-500/50 shadow-[0_0_10px_rgba(14,165,233,0.1)]';
+                    content = <span className="truncate pr-2 font-bold">{formatTeamName(teamName)}</span>;
+                }
+            } else if (eliminatedTeams.has(teamName)) {
+                // 3. ELIMINATED TEAM (Lost this match, wasn't picked to advance further)
+                btnClass = 'bg-slate-800/80 text-slate-500 border border-transparent';
+                content = (
+                    <div className="flex flex-col text-left truncate">
+                        <span className="truncate pr-2 line-through opacity-60">{formatTeamName(teamName)}</span>
+                    </div>
+                );
             } else if (isBtnDisabled) {
                 btnClass = 'bg-slate-800/50 text-slate-700 border border-transparent cursor-not-allowed';
             }
@@ -455,9 +460,9 @@ export default function Home() {
 
           return (
             <div key={match.id} className="bg-slate-900 border border-slate-800 rounded-xl shadow-xl p-2 space-y-1.5 relative">
-              {renderButtonContent(match.teamA)}
+              {renderButtonContent(match.teamA, 'teamA')}
               <div className="absolute left-0 right-0 top-1/2 h-px bg-slate-800 -z-10"></div>
-              {renderButtonContent(match.teamB)}
+              {renderButtonContent(match.teamB, 'teamB')}
             </div>
           );
         })}
@@ -494,7 +499,7 @@ export default function Home() {
            champContent = (
                <div className="flex flex-col items-center py-4">
                    <span className="text-2xl font-black text-red-400/60 tracking-wide line-through">{formatTeamName(champion)}</span>
-                   <span className="text-xs text-red-500 font-bold uppercase tracking-widest mt-2">Eliminated</span>
+                   <span className="text-xs text-emerald-400 font-bold uppercase tracking-widest mt-2">Real: TBD</span>
                </div>
            );
       } else {
