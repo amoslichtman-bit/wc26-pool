@@ -49,13 +49,9 @@ export default function Home() {
   const targetProfile = profiles.find(p => p.id === targetUserId);
   const isSubmitted = targetProfile?.knockout_picks_submitted === true;
 
-  // Bracket naturally locks if: viewing someone else OR deadline passed OR picks already submitted
   const isNaturallyLocked = isViewingOther || isGlobalKnockoutTimeLocked || isSubmitted;
-
-  // Only unlock if an Admin explicitly checks the override box
   const inputIsDisabled = isNaturallyLocked && !(currentUserIsAdmin && adminEditMode);
 
-  // Real-time Deadline Enforcer for UI labels
   useEffect(() => {
     const checkTime = () => {
       const now = Date.now();
@@ -83,7 +79,6 @@ export default function Home() {
       const groupRanks: Record<string, string[]> = {};
 
       try {
-        // STEP 1: Predict Preliminary Knockout Teams based on PROJECTIONS
         const standingsRes = await fetch('/api/standings', { cache: 'no-store' });
         if (standingsRes.ok) {
           const sData = await standingsRes.json();
@@ -131,7 +126,6 @@ export default function Home() {
           });
         }
 
-        // STEP 2: Anchor Overwrite - Use undisputed 1st/2nd place facts to pull true official API matchups
         const apiRes = await fetch('/api/matches', { cache: 'no-store' });
         if (apiRes.ok) {
           const data = await apiRes.json();
@@ -139,7 +133,6 @@ export default function Home() {
             
             const r32Matches = data.matches.filter((m: any) => m.stage === 'LAST_32');
             
-            // Map the undisputed positions to their specific updated index structures matching Wikipedia
             const R32_ANCHORS: Record<number, string> = {
               1: groupRanks['E']?.[0], 2: groupRanks['I']?.[0], 3: groupRanks['A']?.[1], 4: groupRanks['F']?.[0],
               5: groupRanks['K']?.[1], 6: groupRanks['H']?.[0], 7: groupRanks['D']?.[0], 8: groupRanks['G']?.[0],
@@ -168,7 +161,6 @@ export default function Home() {
               return m;
             });
 
-            // Build the Real-Life Tournament Simulation Tree
             let realMatches = JSON.parse(JSON.stringify(dynamicMatches));
             let elimSet = new Set<string>();
             let realChamp = null;
@@ -279,7 +271,12 @@ export default function Home() {
       const sortedPicks = userPicks.sort((a, b) => (roundOrder[a.predicted_round] || 0) - (roundOrder[b.predicted_round] || 0));
 
       sortedPicks.forEach(pick => {
-        if (pick.predicted_round === 'CHAMPION') { finalChamp = pick.team_name; return; }
+        if (pick.predicted_round === 'CHAMPION') { 
+            finalChamp = pick.team_name; 
+            const finalMatch = freshMatches.find((m: any) => m.round === 'F');
+            if (finalMatch) finalMatch.winner = pick.team_name;
+            return; 
+        }
         if (pick.predicted_round === 'TIEBREAKER') { finalTiebreak = pick.team_name; return; }
 
         const matchToWin = freshMatches.find((m: any) => m.round === pick.predicted_round && (m.teamA === pick.team_name || m.teamB === pick.team_name));
@@ -339,24 +336,28 @@ export default function Home() {
     setIsSaving(true);
     setSaveStatus('idle');
 
-    const completedPicks = matches.filter(m => m.winner !== null);
+    const saveUserId = isViewingOther && currentUserIsAdmin && adminEditMode ? targetUserId : user.id;
+
+    // Filter out 'F' so we don't erroneously write an 'F' pick to the database
+    const completedPicks = matches.filter(m => m.winner !== null && m.round !== 'F');
+    
     const picksToInsert = completedPicks.map(match => ({
-      user_id: user.id, team_name: match.winner, predicted_round: match.round
+      user_id: saveUserId, team_name: match.winner, predicted_round: match.round
     }));
 
-    if (champion) picksToInsert.push({ user_id: user.id, team_name: champion, predicted_round: 'CHAMPION' });
-    if (tiebreakerScore.trim() !== '') picksToInsert.push({ user_id: user.id, team_name: tiebreakerScore, predicted_round: 'TIEBREAKER' });
+    // Explicitly write the CHAMPION pick
+    if (champion) picksToInsert.push({ user_id: saveUserId, team_name: champion, predicted_round: 'CHAMPION' });
+    if (tiebreakerScore.trim() !== '') picksToInsert.push({ user_id: saveUserId, team_name: tiebreakerScore, predicted_round: 'TIEBREAKER' });
 
     try {
-      const saveUserId = isViewingOther && currentUserIsAdmin && adminEditMode ? targetUserId : user.id;
       await supabase.from('phase_2_picks').delete().eq('user_id', saveUserId);
       
       if (picksToInsert.length > 0) {
-        const { error } = await supabase.from('phase_2_picks').insert(picksToInsert.map(p => ({ ...p, user_id: saveUserId })));
+        const { error } = await supabase.from('phase_2_picks').insert(picksToInsert);
         if (error) throw error;
       }
       
-      setAllPhase2Picks(prev => [...prev.filter(p => p.user_id !== saveUserId), ...picksToInsert.map(p => ({ ...p, user_id: saveUserId }))]);
+      setAllPhase2Picks(prev => [...prev.filter(p => p.user_id !== saveUserId), ...picksToInsert]);
       setSaveStatus('success');
     } catch (error) {
       console.error(error);
