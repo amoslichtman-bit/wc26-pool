@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { API_TO_COMMON_MAP as API_MAP, INITIAL_KNOCKOUT_MATCHES, assignThirdPlaceTeams } from '../../lib/constants';
+export const dynamic = 'force-dynamic';
+
 const TEAM_ELOS: Record<string, number> = {
   'Argentina': 2148,
   'Spain': 2144,
@@ -43,7 +45,7 @@ const TEAM_ELOS: Record<string, number> = {
   'Jordan': 1628,
   'Bosnia and Herzegovina': 1622,
   'Bosnia & Herzegovina': 1622, 
-  'Bosnia & Herzigovina': 1622, // Handled for spreadsheet typo
+  'Bosnia & Herzigovina': 1622,
   'Cape Verde': 1622,
   'Saudi Arabia': 1596,
   'Ghana': 1575,
@@ -58,7 +60,6 @@ const TEAM_ELOS: Record<string, number> = {
 };
 
 const getElo = (team: string) => TEAM_ELOS[team] || 1400;
-export const dynamic = 'force-dynamic';
 
 export default function Simulator() {
   const [loading, setLoading] = useState(true);
@@ -103,7 +104,6 @@ export default function Simulator() {
           const thirdPlaceTeams: any[] = [];
           
           if (sData.standings) {
-            // STRICT ALIGNMENT: Only use the TOTAL table, exactly like the main leaderboard
             const groups = sData.standings.filter((s: any) => s.type === 'TOTAL');
             
             groups.forEach((group: any) => {
@@ -122,12 +122,10 @@ export default function Simulator() {
             });
           }
 
-          // Sort and slice the top 8 advancing 3rd place teams
           thirdPlaceTeams.sort((a,b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf));
           const top8Thirds = thirdPlaceTeams.slice(0, 8);
-          advancingThirdPlace = top8Thirds.map(t => t.team); // Used for Base P1 Points scoring
+          advancingThirdPlace = top8Thirds.map(t => t.team); 
 
-          // Run the chronological constraint solver matrix on the top 8 advancing 3rds
           const perfectAssignments = assignThirdPlaceTeams(top8Thirds);
 
           dynamicMatches = dynamicMatches.map((m: any) => {
@@ -142,7 +140,6 @@ export default function Simulator() {
             const match2ndB = newB.match(/2nd Place Group ([A-L])/);
             if(match2ndB && groupRanks[match2ndB[1]]) newB = groupRanks[match2ndB[1]][1] || newB;
 
-            // Apply official Annex C routing for 3rd place teams
             if (perfectAssignments) {
               if (newA.includes('3Q Groups')) newA = perfectAssignments[m.id] || newA;
               if (newB.includes('3Q Groups')) newB = perfectAssignments[m.id] || newB;
@@ -160,7 +157,6 @@ export default function Simulator() {
             const liveTeamData = currentStandings[pick.team_name];
             if (!liveTeamData) return;
 
-            // 1. ADVANCING POINTS (+3)
             const isActuallyAdvancing = liveTeamData.rank === 1 || liveTeamData.rank === 2 || advancingThirdPlace.includes(pick.team_name);
             const userPredictedAdvance = ['1', '2', '3Q'].includes(pick.placement);
 
@@ -168,13 +164,11 @@ export default function Simulator() {
               p1Points += 3; 
             }
             
-            // 2. STRICT EXACT PLACEMENT POINTS (+1 for ADVANCING TEAMS ONLY)
             let actualPlacementString = liveTeamData.rank.toString();
             if (liveTeamData.rank === 3) {
               actualPlacementString = advancingThirdPlace.includes(pick.team_name) ? '3Q' : '3';
             }
 
-            // Must match the exact string AND the team must actually be advancing
             if (pick.placement === actualPlacementString && isActuallyAdvancing) { 
               p1Points += 1; 
             }
@@ -184,7 +178,7 @@ export default function Simulator() {
         });
         setBaseScores(initialScores);
 
-        // STEP 2: Anchor Overwrite for Simulator
+        // Anchor Overwrite for Simulator
         if (matchesRes.ok) {
           const mData = await matchesRes.json();
           if (mData.matches && mData.matches.length > 0) {
@@ -230,7 +224,6 @@ export default function Simulator() {
                     const tHome = API_MAP[rawHome] || rawHome;
                     const tAway = API_MAP[rawAway] || rawAway;
 
-                    // Match the API game to our bracket slot by finding the exact pair of teams
                     const matchToUpdate = dynamicMatches.find((m: any) => 
                         m.round === roundStr && (
                             (m.teamA === tHome && m.teamB === tAway) || 
@@ -239,7 +232,6 @@ export default function Simulator() {
                     );
 
                     if (matchToUpdate) {
-                        // Ensure API home/away scores map correctly to bracket top(A)/bottom(B) slots
                         const isHomeTeamA = matchToUpdate.teamA === tHome;
                         
                         const homeScore = apiM.score?.fullTime?.home ?? 0;
@@ -262,7 +254,6 @@ export default function Simulator() {
                                 matchToUpdate.winner = winnerName;
                                 matchToUpdate.actualWinner = winnerName;
 
-                                // Push real winner into the next round's slot
                                 if (matchToUpdate.nextMatchId) {
                                     const nextM = dynamicMatches.find((m: any) => m.id === matchToUpdate.nextMatchId);
                                     if (nextM) {
@@ -333,22 +324,19 @@ export default function Simulator() {
   const handlePick = (matchId: number, selectedTeam: string) => {
     if (!selectedTeam) return;
     const currentMatch = matches.find(m => m.id === matchId);
-    if (!currentMatch || currentMatch.isFinished) return; // Can't rewrite finished real games
+    if (!currentMatch || currentMatch.isFinished) return; 
 
     const isUnselecting = currentMatch.winner === selectedTeam;
 
     setMatches(prevMatches => {
-      // Safe deep-copy so we can walk down the tree modifying future rounds
       let bracket = JSON.parse(JSON.stringify(prevMatches));
       const target = bracket.find((m: any) => m.id === matchId);
       const oldWinner = target.winner;
 
       if (isUnselecting) {
-        // --- CASE 1: UNSELECTING A TEAM ---
         target.winner = null;
         if (target.round === 'F') setChampion(null);
 
-        // Walk downstream and scrub this team from any future matches it was pushed into
         let curr = target;
         while (curr.nextMatchId) {
           const nextM = bracket.find((m: any) => m.id === curr.nextMatchId);
@@ -366,7 +354,6 @@ export default function Simulator() {
           }
         }
       } else {
-        // --- CASE 2: SELECTING OR SWITCHING A TEAM ---
         target.winner = selectedTeam;
         if (target.round === 'F') setChampion(selectedTeam);
 
@@ -389,7 +376,6 @@ export default function Simulator() {
           }
         }
 
-        // Now push our NEW winner into the immediate next round
         if (target.nextMatchId) {
           const nextM = bracket.find((m: any) => m.id === target.nextMatchId);
           if (nextM && !nextM.isFinished) {
@@ -404,7 +390,7 @@ export default function Simulator() {
     });
   };
 
- const calculateWinProbabilities = () => {
+  const calculateWinProbabilities = () => {
     setIsCalculatingProbs(true);
 
     setTimeout(() => {
@@ -412,18 +398,15 @@ export default function Simulator() {
       const tallies: Record<string, number> = {};
       baseScores.forEach(u => tallies[u.id] = 0);
 
-      // Clean bracket strictly from REALITY
       const baseBracket = JSON.parse(JSON.stringify(matches)).map((m: any) => ({
         ...m,
         winner: m.isFinished ? m.actualWinner : null
       }));
 
-      // Topologically sort matches to ensure R32 finishes before R16, etc.
       const roundOrder: Record<string, number> = { 'R32': 1, 'R16': 2, 'QF': 3, 'SF': 4, 'F': 5 };
       const sortedBracket = baseBracket.sort((a: any, b: any) => roundOrder[a.round] - roundOrder[b.round]);
 
       for (let i = 0; i < ITERATIONS; i++) {
-        // Fast shallow copy for this specific iteration
         const simBracket = sortedBracket.map((m: any) => ({ ...m }));
         const matchMap = new Map();
         simBracket.forEach((m: any) => matchMap.set(m.id, m));
@@ -438,14 +421,12 @@ export default function Simulator() {
             const teamB = match.teamB;
 
             if (teamA && teamB && !teamA.includes('Place') && !teamB.includes('Place')) {
-              // Standard Elo Probability Math
               const eloA = getElo(teamA);
               const eloB = getElo(teamB);
               const probA = 1 / (1 + Math.pow(10, (eloB - eloA) / 400));
               
               winner = Math.random() < probA ? teamA : teamB;
             } else {
-              // Fallback for unresolved placeholder slots
               winner = Math.random() < 0.5 ? teamA : teamB; 
             }
           }
@@ -454,7 +435,6 @@ export default function Simulator() {
             actualResults[match.round].push(winner);
             if (match.round === 'F') actualResults['CHAMPION'].push(winner);
             
-            // Push simulated winner to the next round
             if (match.nextMatchId) {
               const nextM = matchMap.get(match.nextMatchId);
               if (nextM) {
@@ -465,7 +445,6 @@ export default function Simulator() {
           }
         });
 
-        // Score the pool against this iteration's bracket
         let maxScore = -1;
         let iterationWinners: string[] = [];
 
@@ -488,11 +467,9 @@ export default function Simulator() {
           }
         });
 
-        // Credit the winner(s) of this iteration
         iterationWinners.forEach(id => tallies[id] += 1);
       }
 
-      // Convert tallies to percentages
       const percentages: Record<string, string> = {};
       Object.keys(tallies).forEach(id => {
         const pct = (tallies[id] / ITERATIONS) * 100;
@@ -532,12 +509,21 @@ export default function Simulator() {
             }
 
             return (
-<button 
-                onClick={calculateWinProbabilities}
-                disabled={isCalculatingProbs}
-                className="mt-3 sm:mt-0 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-4 py-2 rounded-full transition-colors disabled:opacity-50 w-full sm:w-auto"
+              <button
+                onClick={() => handlePick(match.id, teamName)}
+                disabled={match.isFinished || !teamName}
+                className={`w-full flex justify-between items-center p-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${btnClass}`}
               >
-                {isCalculatingProbs ? 'Running 10,000 Simulations...' : 'Calculate Win % (Elo Monte Carlo)'}
+                <div className="flex flex-col items-start truncate">
+                  <span className={`truncate pr-2 ${isRealLoser ? 'line-through text-slate-500' : ''}`}>{teamName || 'TBD'}</span>
+                  {match.isLive && <span className="text-[9px] text-red-500 font-bold uppercase tracking-widest animate-pulse mt-0.5">Live</span>}
+                </div>
+                
+                {(match.isFinished || match.isLive) && slotScore !== undefined && slotScore !== null && (
+                  <div className={`font-mono text-sm px-2 py-0.5 rounded ${isRealWinner ? 'bg-emerald-950 text-emerald-400' : 'bg-slate-950 text-slate-500'}`}>
+                    {slotScore} {slotPens !== undefined && <span className="text-[9px] ml-1">({slotPens})</span>}
+                  </div>
+                )}
               </button>
             );
           };
@@ -604,9 +590,9 @@ export default function Simulator() {
               <button 
                 onClick={calculateWinProbabilities}
                 disabled={isCalculatingProbs}
-                className="mt-3 sm:mt-0 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-4 py-2 rounded-full transition-colors disabled:opacity-50"
+                className="mt-3 sm:mt-0 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-4 py-2 rounded-full transition-colors disabled:opacity-50 w-full sm:w-auto"
               >
-                {isCalculatingProbs ? 'Crunching Scenarios...' : 'Calculate Win % (Team Strength Agnostic)'}
+                {isCalculatingProbs ? 'Running 10,000 Simulations...' : 'Calculate Win % (Elo Monte Carlo)'}
               </button>
             </div>
 
