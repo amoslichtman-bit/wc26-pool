@@ -39,6 +39,7 @@ export default function Simulator() {
 
   // Win Probability States
   const [winProbs, setWinProbs] = useState<Record<string, string> | null>(null);
+  const [secondProbs, setSecondProbs] = useState<Record<string, string> | null>(null);
   const [isCalculatingProbs, setIsCalculatingProbs] = useState(false);
   const [simProgress, setSimProgress] = useState<number | null>(null);
   
@@ -277,6 +278,7 @@ export default function Simulator() {
     setProjectedLeaderboard(projected);
     
     setWinProbs(null); 
+    setSecondProbs(null);
   }, [matches, champion, baseScores, allPhase2Picks]);
 
   const handlePick = (matchId: number, selectedTeam: string) => {
@@ -356,8 +358,12 @@ export default function Simulator() {
     const CHUNK_SIZE = 500;
     let currentIteration = 0;
 
-    const tallies: Record<string, number> = {};
-    baseScores.forEach(u => tallies[u.id] = 0);
+    const talliesFirst: Record<string, number> = {};
+    const talliesSecond: Record<string, number> = {};
+    baseScores.forEach(u => {
+      talliesFirst[u.id] = 0;
+      talliesSecond[u.id] = 0;
+    });
 
     const userPicksFast = baseScores.map(user => {
       return {
@@ -384,6 +390,9 @@ export default function Simulator() {
         if (m.round === 'F') baselineResults[m.actualWinner + '_CHAMPION'] = true;
       }
     });
+
+    // Zero-allocation pre-created array for tracking points inside loop
+    const ptsArray: number[] = new Array(userPicksFast.length);
 
     const processChunk = () => {
       const end = Math.min(currentIteration + CHUNK_SIZE, ITERATIONS);
@@ -417,8 +426,9 @@ export default function Simulator() {
           }
         });
 
+        // Pass 1: Calculate points and find top 2 distinct scores
         let maxScore = -1;
-        let iterationWinners: string[] = [];
+        let secondMaxScore = -1;
 
         for (let i = 0; i < userPicksFast.length; i++) {
           const user = userPicksFast[i];
@@ -427,17 +437,43 @@ export default function Simulator() {
           for (let j = 0; j < user.picks.length; j++) {
             if (simResults[user.picks[j].key]) pts += user.picks[j].pts;
           }
+          ptsArray[i] = pts;
 
           if (pts > maxScore) {
+            secondMaxScore = maxScore;
             maxScore = pts;
-            iterationWinners = [user.id];
-          } else if (pts === maxScore) {
-            iterationWinners.push(user.id);
+          } else if (pts < maxScore && pts > secondMaxScore) {
+            secondMaxScore = pts;
           }
         }
 
-        for (let k = 0; k < iterationWinners.length; k++) {
-          tallies[iterationWinners[k]] += 1;
+        // Pass 2: Count tied players at rank 1 and rank 2
+        let firstCount = 0;
+        let secondCount = 0;
+        for (let i = 0; i < ptsArray.length; i++) {
+          if (ptsArray[i] === maxScore) firstCount++;
+          else if (ptsArray[i] === secondMaxScore) secondCount++;
+        }
+
+        // Pass 3: Distribute divided win shares
+        if (firstCount === 1) {
+          // Exactly 1 winner gets 100% 1st place share
+          for (let i = 0; i < ptsArray.length; i++) {
+            if (ptsArray[i] === maxScore) {
+              talliesFirst[userPicksFast[i].id] += 1;
+            } else if (ptsArray[i] === secondMaxScore && secondCount > 0) {
+              talliesSecond[userPicksFast[i].id] += 1 / secondCount;
+            }
+          }
+        } else if (firstCount > 1) {
+          // K tied winners share BOTH 1st and 2nd place shares equally
+          const share = 1 / firstCount;
+          for (let i = 0; i < ptsArray.length; i++) {
+            if (ptsArray[i] === maxScore) {
+              talliesFirst[userPicksFast[i].id] += share;
+              talliesSecond[userPicksFast[i].id] += share;
+            }
+          }
         }
       }
 
@@ -445,13 +481,19 @@ export default function Simulator() {
         setSimProgress(Math.round((currentIteration / ITERATIONS) * 100));
         setTimeout(processChunk, 0); 
       } else {
-        const percentages: Record<string, string> = {};
-        Object.keys(tallies).forEach(id => {
-          const pct = (tallies[id] / ITERATIONS) * 100;
-          percentages[id] = pct < 0.1 && pct > 0 ? '<0.1' : pct.toFixed(1);
+        const firstPercentages: Record<string, string> = {};
+        const secondPercentages: Record<string, string> = {};
+
+        Object.keys(talliesFirst).forEach(id => {
+          const pct1 = (talliesFirst[id] / ITERATIONS) * 100;
+          firstPercentages[id] = pct1 < 0.1 && pct1 > 0 ? '<0.1' : pct1.toFixed(1);
+
+          const pct2 = (talliesSecond[id] / ITERATIONS) * 100;
+          secondPercentages[id] = pct2 < 0.1 && pct2 > 0 ? '<0.1' : pct2.toFixed(1);
         });
 
-        setWinProbs(percentages);
+        setWinProbs(firstPercentages);
+        setSecondProbs(secondPercentages);
         setSimProgress(null);
         setIsCalculatingProbs(false);
       }
@@ -558,7 +600,7 @@ export default function Simulator() {
             </div>
           </div>
 
-          <div className="max-w-3xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+          <div className="max-w-4xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
             
             <div className="bg-sky-950/30 border-b border-sky-500/20 p-4 flex flex-col sm:flex-row justify-between items-center">
               <h2 className="text-lg font-black text-sky-400 uppercase tracking-widest">Live Projected Leaderboard</h2>
@@ -579,7 +621,8 @@ export default function Simulator() {
                   <tr>
                     <th className="px-6 py-3 font-bold w-16 text-center">Rank</th>
                     <th className="px-6 py-3 font-bold">Player</th>
-                    <th className="px-6 py-3 font-bold text-center text-sky-400 border-l border-slate-800/50">Win %</th>
+                    <th className="px-4 py-3 font-bold text-center text-sky-400 border-l border-slate-800/50">1st %</th>
+                    <th className="px-4 py-3 font-bold text-center text-slate-300 border-r border-slate-800/50">2nd %</th>
                     <th className="px-6 py-3 font-black text-white text-right text-sm">Proj. Points</th>
                   </tr>
                 </thead>
@@ -594,10 +637,19 @@ export default function Simulator() {
                         </span>
                       </td>
                       <td className="px-6 py-3 font-bold text-white text-sm">{user.name}</td>
-                      <td className="px-6 py-3 text-center border-l border-slate-800/50">
+                      <td className="px-4 py-3 text-center border-l border-slate-800/50">
                         {winProbs ? (
                           <span className={`font-mono font-bold text-sm ${winProbs[user.id] === '0.0' ? 'text-slate-600' : 'text-sky-400'}`}>
                             {winProbs[user.id]}%
+                          </span>
+                        ) : (
+                          <span className="text-slate-600 font-mono text-sm">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center border-r border-slate-800/50">
+                        {secondProbs ? (
+                          <span className={`font-mono font-bold text-sm ${secondProbs[user.id] === '0.0' ? 'text-slate-600' : 'text-slate-300'}`}>
+                            {secondProbs[user.id]}%
                           </span>
                         ) : (
                           <span className="text-slate-600 font-mono text-sm">-</span>
