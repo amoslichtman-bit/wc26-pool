@@ -57,7 +57,16 @@ export default function Simulator() {
           supabase.from('phase_2_picks').select('user_id, team_name, predicted_round').limit(10000)
         ]);
 
-        if (p2Picks) setAllPhase2Picks(p2Picks);
+        if (p2Picks) {
+          const enrichedPicks = [...p2Picks];
+          const champPicks = enrichedPicks.filter(p => p.predicted_round === 'CHAMPION');
+          champPicks.forEach(cp => {
+            if (!enrichedPicks.some(p => p.user_id === cp.user_id && p.predicted_round === 'F')) {
+              enrichedPicks.push({ user_id: cp.user_id, team_name: cp.team_name, predicted_round: 'F' });
+            }
+          });
+          setAllPhase2Picks(enrichedPicks);
+        }
 
         let currentStandings: Record<string, { rank: number }> = {};
         let advancingThirdPlace: string[] = [];
@@ -154,17 +163,22 @@ export default function Simulator() {
               13: groupRanks['J']?.[0], 14: groupRanks['D']?.[1], 15: groupRanks['B']?.[0], 16: groupRanks['K']?.[0],
             };
 
+            let availableApiMatches = [...r32Matches];
+
             dynamicMatches = dynamicMatches.map((m: any) => {
               if (m.round === 'R32') {
                 const anchorTeam = R32_ANCHORS[m.id];
                 if (anchorTeam) {
-                  const matchingApiGame = r32Matches.find((apiM: any) => {
+                  const matchIndex = availableApiMatches.findIndex((apiM: any) => {
                     const tHome = API_MAP[apiM.homeTeam?.name] || apiM.homeTeam?.name;
                     const tAway = API_MAP[apiM.awayTeam?.name] || apiM.awayTeam?.name;
                     return tHome === anchorTeam || tAway === anchorTeam;
                   });
 
-                  if (matchingApiGame) {
+                  if (matchIndex !== -1) {
+                    const matchingApiGame = availableApiMatches[matchIndex];
+                    availableApiMatches.splice(matchIndex, 1);
+                    
                     const rawHome = matchingApiGame.homeTeam?.name;
                     const rawAway = matchingApiGame.awayTeam?.name;
                     if (rawHome) m.teamA = API_MAP[rawHome] || rawHome;
@@ -185,14 +199,32 @@ export default function Simulator() {
                     const tHome = API_MAP[rawHome] || rawHome;
                     const tAway = API_MAP[rawAway] || rawAway;
 
-                    const matchToUpdate = dynamicMatches.find((m: any) => 
+                    let matchToUpdate = dynamicMatches.find((m: any) => 
                         m.round === roundStr && (
                             (m.teamA === tHome && m.teamB === tAway) || 
                             (m.teamA === tAway && m.teamB === tHome)
                         )
                     );
 
+                    if (!matchToUpdate) {
+                        matchToUpdate = dynamicMatches.find((m: any) => 
+                            m.round === roundStr && (
+                                m.teamA === tHome || m.teamB === tHome || 
+                                m.teamA === tAway || m.teamB === tAway
+                            )
+                        );
+                    }
+
                     if (matchToUpdate) {
+                        if (matchToUpdate.teamA === tHome) matchToUpdate.teamB = tAway;
+                        else if (matchToUpdate.teamB === tHome) matchToUpdate.teamA = tAway;
+                        else if (matchToUpdate.teamA === tAway) matchToUpdate.teamB = tHome;
+                        else if (matchToUpdate.teamB === tAway) matchToUpdate.teamA = tHome;
+                        else {
+                             matchToUpdate.teamA = tHome;
+                             matchToUpdate.teamB = tAway;
+                        }
+
                         const isHomeTeamA = matchToUpdate.teamA === tHome;
                         
                         const homeScore = apiM.score?.fullTime?.home ?? 0;
@@ -391,7 +423,6 @@ export default function Simulator() {
       }
     });
 
-    // Zero-allocation pre-created array for tracking points inside loop
     const ptsArray: number[] = new Array(userPicksFast.length);
 
     const processChunk = () => {
@@ -426,7 +457,6 @@ export default function Simulator() {
           }
         });
 
-        // Pass 1: Calculate points and find top 2 distinct scores
         let maxScore = -1;
         let secondMaxScore = -1;
 
@@ -447,7 +477,6 @@ export default function Simulator() {
           }
         }
 
-        // Pass 2: Count tied players at rank 1 and rank 2
         let firstCount = 0;
         let secondCount = 0;
         for (let i = 0; i < ptsArray.length; i++) {
@@ -455,9 +484,7 @@ export default function Simulator() {
           else if (ptsArray[i] === secondMaxScore) secondCount++;
         }
 
-        // Pass 3: Distribute divided win shares
         if (firstCount === 1) {
-          // Exactly 1 winner gets 100% 1st place share
           for (let i = 0; i < ptsArray.length; i++) {
             if (ptsArray[i] === maxScore) {
               talliesFirst[userPicksFast[i].id] += 1;
@@ -466,7 +493,6 @@ export default function Simulator() {
             }
           }
         } else if (firstCount > 1) {
-          // K tied winners share BOTH 1st and 2nd place shares equally
           const share = 1 / firstCount;
           for (let i = 0; i < ptsArray.length; i++) {
             if (ptsArray[i] === maxScore) {

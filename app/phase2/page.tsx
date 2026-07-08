@@ -72,7 +72,15 @@ export default function Home() {
 
       const { data: allPicksData } = await supabase.from('phase_2_picks').select('*').limit(10000);
       if (allPicksData) {
-        setAllPhase2Picks(allPicksData);
+        // --- AUTO-PATCH: Ensure every user with a Champion pick also has a Finals slot pick ---
+        const enrichedPicks = [...allPicksData];
+        const champPicks = enrichedPicks.filter(p => p.predicted_round === 'CHAMPION');
+        champPicks.forEach(cp => {
+          if (!enrichedPicks.some(p => p.user_id === cp.user_id && p.predicted_round === 'F')) {
+            enrichedPicks.push({ user_id: cp.user_id, team_name: cp.team_name, predicted_round: 'F' });
+          }
+        });
+        setAllPhase2Picks(enrichedPicks);
       }
 
       let dynamicMatches = JSON.parse(JSON.stringify(INITIAL_KNOCKOUT_MATCHES));
@@ -140,17 +148,23 @@ export default function Home() {
               13: groupRanks['J']?.[0], 14: groupRanks['D']?.[1], 15: groupRanks['B']?.[0], 16: groupRanks['K']?.[0],
             };
 
+            let availableApiMatches = [...r32Matches];
+
             dynamicMatches = dynamicMatches.map((m: any) => {
               if (m.round === 'R32') {
                 const anchorTeam = R32_ANCHORS[m.id];
                 if (anchorTeam) {
-                  const matchingApiGame = r32Matches.find((apiM: any) => {
+                  // --- FIX: Consumable API Matching to prevent duplicates ---
+                  const matchIndex = availableApiMatches.findIndex((apiM: any) => {
                     const tHome = API_MAP[apiM.homeTeam?.name] || apiM.homeTeam?.name;
                     const tAway = API_MAP[apiM.awayTeam?.name] || apiM.awayTeam?.name;
                     return tHome === anchorTeam || tAway === anchorTeam;
                   });
 
-                  if (matchingApiGame) {
+                  if (matchIndex !== -1) {
+                    const matchingApiGame = availableApiMatches[matchIndex];
+                    availableApiMatches.splice(matchIndex, 1); // Remove from pool to prevent another slot claiming it
+                    
                     const rawHome = matchingApiGame.homeTeam?.name;
                     const rawAway = matchingApiGame.awayTeam?.name;
                     if (rawHome) m.teamA = API_MAP[rawHome] || rawHome;
@@ -177,14 +191,36 @@ export default function Home() {
                         const tHome = API_MAP[rawHome] || rawHome;
                         const tAway = API_MAP[rawAway] || rawAway;
 
-                        const matchToUpdate = realMatches.find((m: any) => 
+                        // --- FIX: Robust loose fallback matching to catch mismatched brackets ---
+                        let matchToUpdate = realMatches.find((m: any) => 
                             m.round === roundString && (
                                 (m.teamA === tHome && m.teamB === tAway) || 
                                 (m.teamA === tAway && m.teamB === tHome)
                             )
                         );
 
+                        // If a perfect match fails because a previous round upset didn't register locally,
+                        // find the slot by locating at least one of the known teams.
+                        if (!matchToUpdate) {
+                            matchToUpdate = realMatches.find((m: any) => 
+                                m.round === roundString && (
+                                    m.teamA === tHome || m.teamB === tHome || 
+                                    m.teamA === tAway || m.teamB === tAway
+                                )
+                            );
+                        }
+
                         if (matchToUpdate) {
+                            // Automatically heal the slot so both real teams render perfectly
+                            if (matchToUpdate.teamA === tHome) matchToUpdate.teamB = tAway;
+                            else if (matchToUpdate.teamB === tHome) matchToUpdate.teamA = tAway;
+                            else if (matchToUpdate.teamA === tAway) matchToUpdate.teamB = tHome;
+                            else if (matchToUpdate.teamB === tAway) matchToUpdate.teamA = tHome;
+                            else {
+                                 matchToUpdate.teamA = tHome;
+                                 matchToUpdate.teamB = tAway;
+                            }
+
                             let winnerName = null; 
                             let loserName = null;
 
@@ -271,12 +307,7 @@ export default function Home() {
       const sortedPicks = userPicks.sort((a, b) => (roundOrder[a.predicted_round] || 0) - (roundOrder[b.predicted_round] || 0));
 
       sortedPicks.forEach(pick => {
-        if (pick.predicted_round === 'CHAMPION') { 
-            finalChamp = pick.team_name; 
-            const finalMatch = freshMatches.find((m: any) => m.round === 'F');
-            if (finalMatch) finalMatch.winner = pick.team_name;
-            return; 
-        }
+        if (pick.predicted_round === 'CHAMPION') { finalChamp = pick.team_name; return; }
         if (pick.predicted_round === 'TIEBREAKER') { finalTiebreak = pick.team_name; return; }
 
         const matchToWin = freshMatches.find((m: any) => m.round === pick.predicted_round && (m.teamA === pick.team_name || m.teamB === pick.team_name));
@@ -321,7 +352,6 @@ export default function Home() {
     setHasUnsavedChanges(true);
   };
 
-  // Debounced Auto-Save
   useEffect(() => {
     if (!hasUnsavedChanges || (!currentUserIsAdmin && isViewingOther) || !user) return;
 
@@ -338,14 +368,13 @@ export default function Home() {
 
     const saveUserId = isViewingOther && currentUserIsAdmin && adminEditMode ? targetUserId : user.id;
 
-    // Filter out 'F' so we don't erroneously write an 'F' pick to the database
-    const completedPicks = matches.filter(m => m.winner !== null && m.round !== 'F');
+    // Treat 'F' explicitly as a standard pick to save to the database alongside the others
+    const completedPicks = matches.filter(m => m.winner !== null);
     
     const picksToInsert = completedPicks.map(match => ({
       user_id: saveUserId, team_name: match.winner, predicted_round: match.round
     }));
 
-    // Explicitly write the CHAMPION pick
     if (champion) picksToInsert.push({ user_id: saveUserId, team_name: champion, predicted_round: 'CHAMPION' });
     if (tiebreakerScore.trim() !== '') picksToInsert.push({ user_id: saveUserId, team_name: tiebreakerScore, predicted_round: 'TIEBREAKER' });
 
@@ -360,7 +389,7 @@ export default function Home() {
       setAllPhase2Picks(prev => [...prev.filter(p => p.user_id !== saveUserId), ...picksToInsert]);
       setSaveStatus('success');
     } catch (error) {
-      console.error(error);
+      console.error("Save error: Check Supabase RLS policies if editing another user's picks.", error);
       setSaveStatus('error');
     } finally {
       setIsSaving(false);
