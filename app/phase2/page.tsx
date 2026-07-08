@@ -95,11 +95,13 @@ export default function Home() {
           
           groupStandings.forEach((group: any) => {
             const groupLetter = group.group.replace('GROUP_', '');
-            const sorted = group.table.sort((a: any, b: any) => (b.points - a.points) || (b.goalDifference - a.goalDifference) || (b.goalsFor - a.goalsFor));
             
-            groupRanks[groupLetter] = sorted.map((t: any) => API_MAP[t.team.name] || t.team.name);
-            if (sorted[2]) {
-              thirds.push({ team: groupRanks[groupLetter][2], group: groupLetter, pts: sorted[2].points, gd: sorted[2].goalDifference, gf: sorted[2].goalsFor });
+            // STRICT FIX: Rely entirely on the API's native sorting to preserve official FIFA tiebreakers.
+            groupRanks[groupLetter] = group.table.map((row: any) => API_MAP[row.team.name] || row.team.name);
+            
+            if (group.table[2]) {
+              const t = group.table[2];
+              thirds.push({ team: API_MAP[t.team.name] || t.team.name, group: groupLetter, pts: t.points, gd: t.goalDifference, gf: t.goalsFor });
             }
           });
 
@@ -189,46 +191,15 @@ export default function Home() {
                         const tHome = API_MAP[rawHome] || rawHome;
                         const tAway = API_MAP[rawAway] || rawAway;
 
-                        const parentRoundMap: Record<string, string> = { 'R16': 'R32', 'QF': 'R16', 'SF': 'QF', 'F': 'SF' };
-                        const parentRound = parentRoundMap[roundString];
-
-                        let matchToUpdate = null;
-
-                        // Bulletproof Strategy 1: Find slot structurally via previous round parent routing
-                        if (parentRound) {
-                          const homeParentMatch = realMatches.find((m: any) => m.round === parentRound && (m.teamA === tHome || m.teamB === tHome));
-                          const awayParentMatch = realMatches.find((m: any) => m.round === parentRound && (m.teamA === tAway || m.teamB === tAway));
-
-                          if (homeParentMatch) matchToUpdate = realMatches.find((m: any) => m.id === homeParentMatch.nextMatchId);
-                          else if (awayParentMatch) matchToUpdate = realMatches.find((m: any) => m.id === awayParentMatch.nextMatchId);
-                        }
-
-                        // Strategy 2: Exact fallback pair lookup
-                        if (!matchToUpdate) {
-                            matchToUpdate = realMatches.find((m: any) => 
-                                m.round === roundString && (
-                                    (m.teamA === tHome && m.teamB === tAway) || 
-                                    (m.teamA === tAway && m.teamB === tHome)
-                                )
-                            );
-                        }
+                        // STRICT FIX: The match MUST accurately pair both teams based on structural progression
+                        const matchToUpdate = realMatches.find((m: any) => 
+                            m.round === roundString && (
+                                (m.teamA === tHome && m.teamB === tAway) || 
+                                (m.teamA === tAway && m.teamB === tHome)
+                            )
+                        );
 
                         if (matchToUpdate) {
-                            let homeParentMatch = parentRound ? realMatches.find((m: any) => m.round === parentRound && (m.teamA === tHome || m.teamB === tHome)) : null;
-                            let awayParentMatch = parentRound ? realMatches.find((m: any) => m.round === parentRound && (m.teamA === tAway || m.teamB === tAway)) : null;
-                            
-                            let homeSlot = 'home';
-                            if (homeParentMatch) homeSlot = homeParentMatch.slot;
-                            else if (awayParentMatch) homeSlot = awayParentMatch.slot === 'home' ? 'away' : 'home';
-
-                            if (homeSlot === 'home') {
-                              matchToUpdate.teamA = tHome;
-                              matchToUpdate.teamB = tAway;
-                            } else {
-                              matchToUpdate.teamA = tAway;
-                              matchToUpdate.teamB = tHome;
-                            }
-
                             let winnerName = null; 
                             let loserName = null;
 
@@ -237,7 +208,7 @@ export default function Home() {
                                 loserName = tAway;
                             } else if (apiM.score?.winner === 'AWAY_TEAM') {
                                 winnerName = tAway; 
- *                              loserName = tHome;
+                                loserName = tHome;
                             }
 
                             if (loserName) elimSet.add(loserName);
@@ -450,7 +421,7 @@ export default function Home() {
                         content = (
                             <div className="flex flex-col text-left truncate">
                                 <span className="truncate pr-2 font-bold">{formatTeamName(teamName)}</span>
-                                <span className="text-[9px] text-emerald-500 uppercase tracking-wider font-black">✓ Correct</span>
+                                <span className="text-[9px] text-emerald-500 uppercase tracking-wider font-black">✓ CORRECT</span>
                             </div>
                         );
                     } else {
@@ -512,7 +483,7 @@ export default function Home() {
               champContent = (
                   <div className="flex flex-col items-center py-4">
                       <span className="text-2xl font-black text-emerald-400 tracking-wide">{formatTeamName(champion)}</span>
-                      <span className="text-xs text-emerald-500 font-black uppercase tracking-widest mt-2">✓ Correct Champion</span>
+                      <span className="text-xs text-emerald-500 font-black uppercase tracking-widest mt-2">✓ CORRECT CHAMPION</span>
                   </div>
               );
           } else {

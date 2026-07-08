@@ -81,8 +81,7 @@ export default function Simulator() {
             groups.forEach((group: any) => {
               const groupLetter = group.group.replace('GROUP_', '');
               
-              const sorted = group.table.sort((a: any, b: any) => (b.points - a.points) || (b.goalDifference - a.goalDifference) || (b.goalsFor - a.goalsFor));
-              groupRanks[groupLetter] = sorted.map((t: any) => API_MAP[t.team.name] || t.team.name);
+              groupRanks[groupLetter] = group.table.map((row: any) => API_MAP[row.team.name] || row.team.name);
 
               group.table.forEach((row: any, index: number) => {
                 const teamName = API_MAP[row.team.name] || row.team.name;
@@ -199,44 +198,14 @@ export default function Simulator() {
                     const tHome = API_MAP[rawHome] || rawHome;
                     const tAway = API_MAP[rawAway] || rawAway;
 
-                    const parentRoundMap: Record<string, string> = { 'R16': 'R32', 'QF': 'R16', 'SF': 'QF', 'F': 'SF' };
-                    const parentRound = parentRoundMap[roundStr];
-
-                    let matchToUpdate = null;
-
-                    if (parentRound) {
-                      const homeParentMatch = dynamicMatches.find((m: any) => m.round === parentRound && (m.teamA === tHome || m.teamB === tHome));
-                      const awayParentMatch = dynamicMatches.find((m: any) => m.round === parentRound && (m.teamA === tAway || m.teamB === tAway));
-
-                      if (homeParentMatch) matchToUpdate = dynamicMatches.find((m: any) => m.id === homeParentMatch.nextMatchId);
-                      else if (awayParentMatch) matchToUpdate = dynamicMatches.find((m: any) => m.id === awayParentMatch.nextMatchId);
-                    }
-
-                    if (!matchToUpdate) {
-                      matchToUpdate = dynamicMatches.find((m: any) => 
-                          m.round === roundStr && (
-                              (m.teamA === tHome && m.teamB === tAway) || 
-                              (m.teamA === tAway && m.teamB === tHome)
-                          )
-                      );
-                    }
+                    const matchToUpdate = dynamicMatches.find((m: any) => 
+                        m.round === roundStr && (
+                            (m.teamA === tHome && m.teamB === tAway) || 
+                            (m.teamA === tAway && m.teamB === tHome)
+                        )
+                    );
 
                     if (matchToUpdate) {
-                        let homeParentMatch = parentRound ? dynamicMatches.find((m: any) => m.round === parentRound && (m.teamA === tHome || m.teamB === tHome)) : null;
-                        let awayParentMatch = parentRound ? dynamicMatches.find((m: any) => m.round === parentRound && (m.teamA === tAway || m.teamB === tAway)) : null;
-                        
-                        let homeSlot = 'home';
-                        if (homeParentMatch) homeSlot = homeParentMatch.slot;
-                        else if (awayParentMatch) homeSlot = awayParentMatch.slot === 'home' ? 'away' : 'home';
-
-                        if (homeSlot === 'home') {
-                          matchToUpdate.teamA = tHome;
-                          matchToUpdate.teamB = tAway;
-                        } else {
-                          matchToUpdate.teamA = tAway;
-                          matchToUpdate.teamB = tHome;
-                        }
-
                         const isHomeTeamA = matchToUpdate.teamA === tHome;
                         
                         const homeScore = apiM.score?.fullTime?.home ?? 0;
