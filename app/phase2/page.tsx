@@ -24,7 +24,6 @@ export default function Home() {
   // Real-Life Tournament Data
   const [actualBracket, setActualBracket] = useState<any[]>([]);
   const [actualChampion, setActualChampion] = useState<string | null>(null);
-  const [eliminatedTeams, setEliminatedTeams] = useState<Set<string>>(new Set());
   
   const [profiles, setProfiles] = useState<any[]>([]);
   const [allPhase2Picks, setAllPhase2Picks] = useState<any[]>([]);
@@ -96,7 +95,6 @@ export default function Home() {
           groupStandings.forEach((group: any) => {
             const groupLetter = group.group.replace('GROUP_', '');
             
-            // STRICT FIX: Rely entirely on the API's native sorting to preserve official FIFA tiebreakers.
             groupRanks[groupLetter] = group.table.map((row: any) => API_MAP[row.team.name] || row.team.name);
             
             if (group.table[2]) {
@@ -176,7 +174,6 @@ export default function Home() {
             });
 
             let realMatches = JSON.parse(JSON.stringify(dynamicMatches));
-            let elimSet = new Set<string>();
             let realChamp = null;
 
             const processStage = (apiStageMatches: any[], roundString: string) => {
@@ -191,7 +188,6 @@ export default function Home() {
                         const tHome = API_MAP[rawHome] || rawHome;
                         const tAway = API_MAP[rawAway] || rawAway;
 
-                        // STRICT FIX: The match MUST accurately pair both teams based on structural progression
                         const matchToUpdate = realMatches.find((m: any) => 
                             m.round === roundString && (
                                 (m.teamA === tHome && m.teamB === tAway) || 
@@ -200,18 +196,27 @@ export default function Home() {
                         );
 
                         if (matchToUpdate) {
-                            let winnerName = null; 
-                            let loserName = null;
+                            matchToUpdate.isFinished = true;
+                            
+                            let winnerName: string | null = null; 
 
                             if (apiM.score?.winner === 'HOME_TEAM') {
                                 winnerName = tHome; 
-                                loserName = tAway;
                             } else if (apiM.score?.winner === 'AWAY_TEAM') {
                                 winnerName = tAway; 
-                                loserName = tHome;
+                            } else {
+                                // Explicitly evaluate Penalty Shootouts if API returned 'DRAW'
+                                const homeScore = apiM.score?.fullTime?.home ?? 0;
+                                const awayScore = apiM.score?.fullTime?.away ?? 0;
+                                const homePens = apiM.score?.penalties?.home;
+                                const awayPens = apiM.score?.penalties?.away;
+                                
+                                if (homePens !== undefined && awayPens !== undefined && homePens !== awayPens) {
+                                    winnerName = homePens > awayPens ? tHome : tAway;
+                                } else if (homeScore !== awayScore) {
+                                    winnerName = homeScore > awayScore ? tHome : tAway;
+                                }
                             }
-
-                            if (loserName) elimSet.add(loserName);
 
                             if (winnerName) {
                                 matchToUpdate.winner = winnerName;
@@ -238,7 +243,6 @@ export default function Home() {
             processStage(data.matches.filter((m: any) => m.stage === 'FINAL'), 'F');
 
             setActualBracket(realMatches);
-            setEliminatedTeams(elimSet);
             setActualChampion(realChamp);
           }
         }
@@ -397,7 +401,8 @@ export default function Home() {
             const isBtnDisabled = !teamName || teamName.includes('Place') || teamName.includes('3Q') || inputIsDisabled;
 
             const actualMatch = actualBracket.find(m => m.id === match.id);
-            const isMatchFinished = actualMatch && actualMatch.winner !== null;
+            const isMatchFinished = actualMatch && actualMatch.isFinished;
+            const actualWinner = actualMatch ? actualMatch.winner : null;
             const actualTeamForSlot = actualMatch ? actualMatch[slotIndex] : null;
 
             const hasRealTeamForSlot = actualTeamForSlot && !actualTeamForSlot.includes('Place') && !actualTeamForSlot.includes('3Q');
@@ -407,16 +412,16 @@ export default function Home() {
             let content = <span className="truncate pr-2">{formatTeamName(teamName)}</span>;
 
             if (isGhostTeam) {
-                btnClass = 'bg-red-500/10 text-red-400 border border-red-500/30';
+                btnClass = 'bg-red-500/10 text-red-400 border border-red-500/30 opacity-75';
                 content = (
                     <div className="flex flex-col text-left truncate">
-                        <span className="truncate pr-2 line-through opacity-60">{formatTeamName(teamName)}</span>
-                        <span className="text-[10px] text-emerald-400 font-bold mt-0.5 leading-tight">Real: {formatTeamName(actualTeamForSlot)}</span>
+                        <span className="truncate pr-2 line-through">{formatTeamName(teamName)}</span>
+                        <span className="text-[10px] text-amber-500 font-bold mt-0.5 leading-tight">Real: {formatTeamName(actualTeamForSlot)}</span>
                     </div>
                 );
-            } else if (isSelected) {
-                if (isMatchFinished) {
-                    if (actualMatch.winner === teamName) {
+            } else if (isMatchFinished) {
+                if (actualWinner === teamName) {
+                    if (isSelected) {
                         btnClass = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50';
                         content = (
                             <div className="flex flex-col text-left truncate">
@@ -425,33 +430,41 @@ export default function Home() {
                             </div>
                         );
                     } else {
-                        btnClass = 'bg-red-500/10 text-red-400 border border-red-500/30';
+                        btnClass = 'bg-emerald-900/40 text-emerald-500 border border-emerald-800/50';
                         content = (
                             <div className="flex flex-col text-left truncate">
-                                <span className="truncate pr-2 line-through opacity-60">{formatTeamName(teamName)}</span>
-                                <span className="text-[10px] text-emerald-400 font-bold mt-0.5 leading-tight">Real: {actualMatch.winner}</span>
+                                <span className="truncate pr-2 font-bold">{formatTeamName(teamName)}</span>
+                                <span className="text-[9px] text-emerald-600 uppercase tracking-wider font-bold">ACTUAL WINNER</span>
                             </div>
                         );
                     }
                 } else {
+                    if (isSelected) {
+                        btnClass = 'bg-red-500/10 text-red-400 border border-red-500/30';
+                        content = (
+                            <div className="flex flex-col text-left truncate">
+                                <span className="truncate pr-2 line-through opacity-75">{formatTeamName(teamName)}</span>
+                                <span className="text-[10px] text-emerald-500 font-bold mt-0.5 leading-tight">Real: {actualWinner}</span>
+                            </div>
+                        );
+                    } else {
+                        btnClass = 'bg-slate-900/60 text-slate-600 border border-slate-800/50 cursor-default opacity-50';
+                        content = <span className="truncate pr-2 line-through">{formatTeamName(teamName)}</span>;
+                    }
+                }
+            } else {
+                if (isSelected) {
                     btnClass = 'bg-sky-500/20 text-sky-400 border border-sky-500/50 shadow-[0_0_10px_rgba(14,165,233,0.1)]';
                     content = <span className="truncate pr-2 font-bold">{formatTeamName(teamName)}</span>;
+                } else if (isBtnDisabled) {
+                    btnClass = 'bg-slate-800/50 text-slate-700 border border-transparent cursor-not-allowed';
                 }
-            } else if (eliminatedTeams.has(teamName)) {
-                btnClass = 'bg-slate-800/80 text-slate-500 border border-transparent';
-                content = (
-                    <div className="flex flex-col text-left truncate">
-                        <span className="truncate pr-2 line-through opacity-60">{formatTeamName(teamName)}</span>
-                    </div>
-                );
-            } else if (isBtnDisabled) {
-                btnClass = 'bg-slate-800/50 text-slate-700 border border-transparent cursor-not-allowed';
             }
 
             return (
               <button
                 onClick={() => handlePick(match.id, teamName)}
-                disabled={isBtnDisabled}
+                disabled={isMatchFinished || isBtnDisabled}
                 className={`w-full flex justify-between items-center p-2 rounded-lg text-xs transition-all duration-200 ${btnClass}`}
               >
                 {content}
@@ -495,14 +508,6 @@ export default function Home() {
                   </div>
               );
           }
-      } else if (eliminatedTeams.has(champion)) {
-           champClass = 'bg-red-500/10 border border-red-500/30 scale-105';
-           champContent = (
-               <div className="flex flex-col items-center py-4">
-                   <span className="text-2xl font-black text-red-400/60 tracking-wide line-through">{formatTeamName(champion)}</span>
-                   <span className="text-xs text-emerald-400 font-bold uppercase tracking-widest mt-2">Real: TBD</span>
-               </div>
-           );
       } else {
            champClass = 'bg-sky-500/10 border border-sky-500/50 shadow-[0_0_20px_rgba(14,165,233,0.1)] scale-105';
            champContent = <div className="text-2xl font-black text-sky-400 tracking-wide py-4">{formatTeamName(champion)}</div>;

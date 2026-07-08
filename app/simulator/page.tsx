@@ -220,9 +220,18 @@ export default function Simulator() {
                             matchToUpdate.penaltiesA = isHomeTeamA ? homePens : awayPens;
                             matchToUpdate.penaltiesB = isHomeTeamA ? awayPens : homePens;
 
-                            let winnerName = null;
-                            if (apiM.score?.winner === 'HOME_TEAM') winnerName = tHome;
-                            else if (apiM.score?.winner === 'AWAY_TEAM') winnerName = tAway;
+                            let winnerName: string | null = null;
+                            if (apiM.score?.winner === 'HOME_TEAM') {
+                                winnerName = tHome;
+                            } else if (apiM.score?.winner === 'AWAY_TEAM') {
+                                winnerName = tAway;
+                            } else {
+                                if (homePens !== undefined && awayPens !== undefined && homePens !== awayPens) {
+                                    winnerName = homePens > awayPens ? tHome : tAway;
+                                } else if (homeScore !== awayScore) {
+                                    winnerName = homeScore > awayScore ? tHome : tAway;
+                                }
+                            }
 
                             if (winnerName) {
                                 matchToUpdate.winner = winnerName;
@@ -521,8 +530,9 @@ export default function Simulator() {
           
           const renderButton = (teamName: string, slotScore: number, slotPens: number | undefined) => {
             const isSelected = match.winner === teamName;
-            const isRealWinner = match.isFinished && match.actualWinner === teamName;
-            const isRealLoser = match.isFinished && match.actualWinner !== teamName;
+            const isMatchFinished = match.isFinished;
+            const isRealWinner = isMatchFinished && match.actualWinner === teamName;
+            const isRealLoser = isMatchFinished && match.actualWinner !== teamName;
             
             let btnClass = 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-transparent';
             
@@ -532,14 +542,14 @@ export default function Simulator() {
               btnClass = 'bg-slate-900/50 text-slate-600 border border-slate-800/50 cursor-default opacity-60';
             } else if (isSelected) {
               btnClass = 'bg-sky-500/20 text-sky-400 border border-sky-500/50 shadow-[0_0_10px_rgba(14,165,233,0.1)]';
-            } else if (!teamName || match.isFinished) {
+            } else if (!teamName || isMatchFinished) {
               btnClass = 'bg-slate-800/30 text-slate-700 border border-transparent cursor-not-allowed';
             }
 
             return (
               <button
                 onClick={() => handlePick(match.id, teamName)}
-                disabled={match.isFinished || !teamName}
+                disabled={isMatchFinished || !teamName}
                 className={`w-full flex justify-between items-center p-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${btnClass}`}
               >
                 <div className="flex flex-col items-start truncate">
@@ -547,7 +557,7 @@ export default function Simulator() {
                   {match.isLive && <span className="text-[9px] text-red-500 font-bold uppercase tracking-widest animate-pulse mt-0.5">Live</span>}
                 </div>
                 
-                {(match.isFinished || match.isLive) && slotScore !== undefined && slotScore !== null && (
+                {(isMatchFinished || match.isLive) && slotScore !== undefined && slotScore !== null && (
                   <div className={`font-mono text-sm px-2 py-0.5 rounded ${isRealWinner ? 'bg-emerald-950 text-emerald-400' : 'bg-slate-950 text-slate-500'}`}>
                     {slotScore} {slotPens !== undefined && <span className="text-[9px] ml-1">({slotPens})</span>}
                   </div>
