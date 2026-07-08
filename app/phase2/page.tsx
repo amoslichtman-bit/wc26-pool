@@ -72,7 +72,6 @@ export default function Home() {
 
       const { data: allPicksData } = await supabase.from('phase_2_picks').select('*').limit(10000);
       if (allPicksData) {
-        // --- AUTO-PATCH: Ensure every user with a Champion pick also has a Finals slot pick ---
         const enrichedPicks = [...allPicksData];
         const champPicks = enrichedPicks.filter(p => p.predicted_round === 'CHAMPION');
         champPicks.forEach(cp => {
@@ -154,7 +153,6 @@ export default function Home() {
               if (m.round === 'R32') {
                 const anchorTeam = R32_ANCHORS[m.id];
                 if (anchorTeam) {
-                  // --- FIX: Consumable API Matching to prevent duplicates ---
                   const matchIndex = availableApiMatches.findIndex((apiM: any) => {
                     const tHome = API_MAP[apiM.homeTeam?.name] || apiM.homeTeam?.name;
                     const tAway = API_MAP[apiM.awayTeam?.name] || apiM.awayTeam?.name;
@@ -163,7 +161,7 @@ export default function Home() {
 
                   if (matchIndex !== -1) {
                     const matchingApiGame = availableApiMatches[matchIndex];
-                    availableApiMatches.splice(matchIndex, 1); // Remove from pool to prevent another slot claiming it
+                    availableApiMatches.splice(matchIndex, 1); 
                     
                     const rawHome = matchingApiGame.homeTeam?.name;
                     const rawAway = matchingApiGame.awayTeam?.name;
@@ -191,34 +189,44 @@ export default function Home() {
                         const tHome = API_MAP[rawHome] || rawHome;
                         const tAway = API_MAP[rawAway] || rawAway;
 
-                        // --- FIX: Robust loose fallback matching to catch mismatched brackets ---
-                        let matchToUpdate = realMatches.find((m: any) => 
-                            m.round === roundString && (
-                                (m.teamA === tHome && m.teamB === tAway) || 
-                                (m.teamA === tAway && m.teamB === tHome)
-                            )
-                        );
+                        const parentRoundMap: Record<string, string> = { 'R16': 'R32', 'QF': 'R16', 'SF': 'QF', 'F': 'SF' };
+                        const parentRound = parentRoundMap[roundString];
 
-                        // If a perfect match fails because a previous round upset didn't register locally,
-                        // find the slot by locating at least one of the known teams.
+                        let matchToUpdate = null;
+
+                        // Bulletproof Strategy 1: Find slot structurally via previous round parent routing
+                        if (parentRound) {
+                          const homeParentMatch = realMatches.find((m: any) => m.round === parentRound && (m.teamA === tHome || m.teamB === tHome));
+                          const awayParentMatch = realMatches.find((m: any) => m.round === parentRound && (m.teamA === tAway || m.teamB === tAway));
+
+                          if (homeParentMatch) matchToUpdate = realMatches.find((m: any) => m.id === homeParentMatch.nextMatchId);
+                          else if (awayParentMatch) matchToUpdate = realMatches.find((m: any) => m.id === awayParentMatch.nextMatchId);
+                        }
+
+                        // Strategy 2: Exact fallback pair lookup
                         if (!matchToUpdate) {
                             matchToUpdate = realMatches.find((m: any) => 
                                 m.round === roundString && (
-                                    m.teamA === tHome || m.teamB === tHome || 
-                                    m.teamA === tAway || m.teamB === tAway
+                                    (m.teamA === tHome && m.teamB === tAway) || 
+                                    (m.teamA === tAway && m.teamB === tHome)
                                 )
                             );
                         }
 
                         if (matchToUpdate) {
-                            // Automatically heal the slot so both real teams render perfectly
-                            if (matchToUpdate.teamA === tHome) matchToUpdate.teamB = tAway;
-                            else if (matchToUpdate.teamB === tHome) matchToUpdate.teamA = tAway;
-                            else if (matchToUpdate.teamA === tAway) matchToUpdate.teamB = tHome;
-                            else if (matchToUpdate.teamB === tAway) matchToUpdate.teamA = tHome;
-                            else {
-                                 matchToUpdate.teamA = tHome;
-                                 matchToUpdate.teamB = tAway;
+                            let homeParentMatch = parentRound ? realMatches.find((m: any) => m.round === parentRound && (m.teamA === tHome || m.teamB === tHome)) : null;
+                            let awayParentMatch = parentRound ? realMatches.find((m: any) => m.round === parentRound && (m.teamA === tAway || m.teamB === tAway)) : null;
+                            
+                            let homeSlot = 'home';
+                            if (homeParentMatch) homeSlot = homeParentMatch.slot;
+                            else if (awayParentMatch) homeSlot = awayParentMatch.slot === 'home' ? 'away' : 'home';
+
+                            if (homeSlot === 'home') {
+                              matchToUpdate.teamA = tHome;
+                              matchToUpdate.teamB = tAway;
+                            } else {
+                              matchToUpdate.teamA = tAway;
+                              matchToUpdate.teamB = tHome;
                             }
 
                             let winnerName = null; 
@@ -229,7 +237,7 @@ export default function Home() {
                                 loserName = tAway;
                             } else if (apiM.score?.winner === 'AWAY_TEAM') {
                                 winnerName = tAway; 
-                                loserName = tHome;
+ *                              loserName = tHome;
                             }
 
                             if (loserName) elimSet.add(loserName);
@@ -368,7 +376,6 @@ export default function Home() {
 
     const saveUserId = isViewingOther && currentUserIsAdmin && adminEditMode ? targetUserId : user.id;
 
-    // Treat 'F' explicitly as a standard pick to save to the database alongside the others
     const completedPicks = matches.filter(m => m.winner !== null);
     
     const picksToInsert = completedPicks.map(match => ({
@@ -389,7 +396,7 @@ export default function Home() {
       setAllPhase2Picks(prev => [...prev.filter(p => p.user_id !== saveUserId), ...picksToInsert]);
       setSaveStatus('success');
     } catch (error) {
-      console.error("Save error: Check Supabase RLS policies if editing another user's picks.", error);
+      console.error(error);
       setSaveStatus('error');
     } finally {
       setIsSaving(false);

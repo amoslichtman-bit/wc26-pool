@@ -199,30 +199,42 @@ export default function Simulator() {
                     const tHome = API_MAP[rawHome] || rawHome;
                     const tAway = API_MAP[rawAway] || rawAway;
 
-                    let matchToUpdate = dynamicMatches.find((m: any) => 
-                        m.round === roundStr && (
-                            (m.teamA === tHome && m.teamB === tAway) || 
-                            (m.teamA === tAway && m.teamB === tHome)
-                        )
-                    );
+                    const parentRoundMap: Record<string, string> = { 'R16': 'R32', 'QF': 'R16', 'SF': 'QF', 'F': 'SF' };
+                    const parentRound = parentRoundMap[roundStr];
+
+                    let matchToUpdate = null;
+
+                    if (parentRound) {
+                      const homeParentMatch = dynamicMatches.find((m: any) => m.round === parentRound && (m.teamA === tHome || m.teamB === tHome));
+                      const awayParentMatch = dynamicMatches.find((m: any) => m.round === parentRound && (m.teamA === tAway || m.teamB === tAway));
+
+                      if (homeParentMatch) matchToUpdate = dynamicMatches.find((m: any) => m.id === homeParentMatch.nextMatchId);
+                      else if (awayParentMatch) matchToUpdate = dynamicMatches.find((m: any) => m.id === awayParentMatch.nextMatchId);
+                    }
 
                     if (!matchToUpdate) {
-                        matchToUpdate = dynamicMatches.find((m: any) => 
-                            m.round === roundStr && (
-                                m.teamA === tHome || m.teamB === tHome || 
-                                m.teamA === tAway || m.teamB === tAway
-                            )
-                        );
+                      matchToUpdate = dynamicMatches.find((m: any) => 
+                          m.round === roundStr && (
+                              (m.teamA === tHome && m.teamB === tAway) || 
+                              (m.teamA === tAway && m.teamB === tHome)
+                          )
+                      );
                     }
 
                     if (matchToUpdate) {
-                        if (matchToUpdate.teamA === tHome) matchToUpdate.teamB = tAway;
-                        else if (matchToUpdate.teamB === tHome) matchToUpdate.teamA = tAway;
-                        else if (matchToUpdate.teamA === tAway) matchToUpdate.teamB = tHome;
-                        else if (matchToUpdate.teamB === tAway) matchToUpdate.teamA = tHome;
-                        else {
-                             matchToUpdate.teamA = tHome;
-                             matchToUpdate.teamB = tAway;
+                        let homeParentMatch = parentRound ? dynamicMatches.find((m: any) => m.round === parentRound && (m.teamA === tHome || m.teamB === tHome)) : null;
+                        let awayParentMatch = parentRound ? dynamicMatches.find((m: any) => m.round === parentRound && (m.teamA === tAway || m.teamB === tAway)) : null;
+                        
+                        let homeSlot = 'home';
+                        if (homeParentMatch) homeSlot = homeParentMatch.slot;
+                        else if (awayParentMatch) homeSlot = awayParentMatch.slot === 'home' ? 'away' : 'home';
+
+                        if (homeSlot === 'home') {
+                          matchToUpdate.teamA = tHome;
+                          matchToUpdate.teamB = tAway;
+                        } else {
+                          matchToUpdate.teamA = tAway;
+                          matchToUpdate.teamB = tHome;
                         }
 
                         const isHomeTeamA = matchToUpdate.teamA === tHome;
@@ -674,7 +686,7 @@ export default function Simulator() {
                       </td>
                       <td className="px-4 py-3 text-center border-r border-slate-800/50">
                         {secondProbs ? (
-                          <span className={`font-mono font-bold text-sm ${secondProbs[user.id] === '0.0' ? 'text-slate-600' : 'text-slate-300'}`}>
+                          <span className={`font-mono font-bold text-sm ${secondProbs[user.id] === '0.0' ? 'text-slate-600' : 'text-sky-300'}`}>
                             {secondProbs[user.id]}%
                           </span>
                         ) : (
